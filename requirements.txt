@@ -1,0 +1,10 @@
+# Pin exact versions after the first working Colab run.
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.7
+tabulate>=0.9
+pytest>=7.0
+# Needed from the RL step onwards (Colab/Kaggle already have torch):
+gymnasium>=0.29
+stable-baselines3>=2.3
+torch>=2.1
