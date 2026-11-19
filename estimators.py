@@ -38,11 +38,13 @@ class KalmanFilter:
         self.P = self._P0.copy()
 
     # -- model ---------------------------------------------------------------
-    def model(self, I: float, u):
-        """Transition x' = F x + c for current I and cooling u (scalar or array)."""
-        Ad, Bd = discretise(self.params, u)
-        q = I * I * self.params.R_int
-        shape = Ad.shape[:-2]
+    def model(self, I, u):
+        """Transition x' = F x + c for current I and cooling u. Both may be scalars or arrays
+        (broadcast together), e.g. a different current for each future step."""
+        u, I = np.asarray(u, dtype=float), np.asarray(I, dtype=float)
+        shape = np.broadcast_shapes(u.shape, I.shape)
+        Ad, Bd = discretise(self.params, np.broadcast_to(u, shape))
+        q = np.broadcast_to(I * I * self.params.R_int, shape)[..., None]
         F = np.zeros(shape + (self.n, self.n))
         c = np.zeros(shape + (self.n,))
         F[..., :2, :2] = Ad
@@ -83,16 +85,18 @@ class KalmanFilter:
     def theta_hat(self) -> float:
         return float(self.x[2]) if self.augment else float("nan")
 
-    def forecast(self, I: float, u_seq) -> tuple[np.ndarray, np.ndarray]:
+    def forecast(self, I, u_seq, return_final: bool = False):
         """Open-loop prediction (no measurement updates) for a batch of input sequences.
 
-        u_seq: array (..., H), the cooling command for each future step; the current I is
-        held constant. Returns (Tc mean, Tc sigma), each (..., H), for steps 1..H.
+        u_seq: array (..., H), the cooling command for each future step. I: the current, either
+        a scalar (held constant) or a per-step array broadcastable to u_seq (a load preview).
+        Returns (Tc mean, Tc sigma), each (..., H), for steps 1..H; with return_final=True
+        also the full mean and covariance after the last step.
         """
         u_seq = np.asarray(u_seq, dtype=float)
         F, c = self.model(I, u_seq)  # (..., H, n, n), (..., H, n)
-        H = u_seq.shape[-1]
-        batch = u_seq.shape[:-1]
+        H = F.shape[-3]
+        batch = F.shape[:-3]
         m = np.broadcast_to(self.x, batch + (self.n,)).copy()
         P = np.broadcast_to(self.P, batch + (self.n, self.n)).copy()
         mean = np.empty(batch + (H,))
@@ -103,4 +107,4 @@ class KalmanFilter:
             P = Ft @ P @ np.swapaxes(Ft, -1, -2) + self.Qk
             mean[..., t] = m[..., 0]
             sig[..., t] = np.sqrt(P[..., 0, 0])
-        return mean, sig
+        return (mean, sig, m, P) if return_final else (mean, sig)

@@ -1,7 +1,7 @@
 {
   "variant": "ppo_dr_nosigma",
   "seed": 1,
-  "timesteps": 507904,
+  "timesteps": 1007616,
   "n_envs": 8,
   "env": {
     "obs_mode": "no_sigma",

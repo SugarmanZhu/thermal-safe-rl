@@ -1,7 +1,7 @@
 {
   "variant": "ppo_dr_raw",
   "seed": 0,
-  "timesteps": 507904,
+  "timesteps": 1007616,
   "n_envs": 8,
   "env": {
     "obs_mode": "raw",

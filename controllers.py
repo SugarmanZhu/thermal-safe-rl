@@ -128,10 +128,16 @@ class BackupCheck:
             m = np.einsum("cij,cj->ci", F, m) + c
             P = F @ P @ np.swapaxes(F, -1, -2) + est.Qk
             worst = np.maximum(worst, m[:, 0] + self.k_sigma * np.sqrt(P[:, 0, 0]))
-        mean = m @ self.phi.T + self.gamma  # (n_c, B): then the worst-case burst
-        var = np.einsum("jk,ckl,jl->cj", self.phi, P, self.phi) + self.sig00
-        worst = np.maximum(worst, (mean + self.k_sigma * np.sqrt(var)).max(axis=1))
+        worst = np.maximum(worst, self.burst_worst(est, m, P))  # then the worst-case burst
         return worst <= self.limit
+
+    def burst_worst(self, est, m: np.ndarray, P: np.ndarray) -> np.ndarray:
+        """Worst Tc_mean + k_sigma * Tc_sigma during a worst-case burst with full cooling,
+        starting from predicted states m (n_c, n) with covariances P (n_c, n, n)."""
+        self._prepare(est)
+        mean = m @ self.phi.T + self.gamma  # (n_c, B)
+        var = np.einsum("jk,ckl,jl->cj", self.phi, P, self.phi) + self.sig00
+        return (mean + self.k_sigma * np.sqrt(var)).max(axis=1)
 
 
 class Shield:
@@ -197,6 +203,31 @@ class ShieldOnly(Controller):
         return self.shield.stats()
 
 
+class PIDShield(Controller):
+    """A PID that aims below the shield's limit, with the shield as backstop.
+
+    The PID tries to keep the estimated core near `setpoint` (default 40 degC), cooling
+    gently and early; the shield (limit 44 degC, backup check) only steps in when that is not
+    enough. Aiming lower than the brake line leaves a margin that also covers estimation
+    errors the filter cannot see (the resistance-mismatch case).
+    """
+
+    def __init__(self, setpoint: float = 40.0):
+        self.pid = PID(setpoint=setpoint)
+        self.shield = Shield()
+        self.name = f"pid{setpoint:.0f}_shield"
+
+    def reset(self) -> None:
+        self.pid.reset()
+        self.shield.reset()
+
+    def act(self, sim) -> float:
+        return self.shield.safe_action(sim, self.pid.act(sim))
+
+    def stats(self) -> dict:
+        return self.shield.stats()
+
+
 class MPC(Controller):
     """Economic MPC by enumeration.
 
@@ -208,12 +239,18 @@ class MPC(Controller):
     so the two differ mainly in how they plan for energy. The current is held constant (no
     drive-cycle preview). If nothing is feasible, take the plan with the smallest
     worst-case excess, which is full cooling in practice.
+
+    preview=True gives the MPC the true current for the next 60 s (a perfect load forecast:
+    an upper bound on what forecasting can buy). The plans are predicted with that current,
+    and the worst-case burst is only assumed after the known window: each plan must leave
+    a state from which a 25 A / 180 s burst can still be survived with full cooling.
     """
-    name = "mpc"
 
     def __init__(self, n_blocks: int = 3, block_len: int = 10, levels=np.linspace(0, 1, 6),
                  limit: float = SHIELD_LIMIT, k_sigma: float = K_SIGMA, w_du: float = 0.01,
-                 backup: bool = True):
+                 backup: bool = True, preview: bool = False):
+        self.name = "mpc_preview" if preview else "mpc"
+        self.preview = preview
         plans = np.array(list(itertools.product(levels, repeat=n_blocks)))  # (n_plans, n_blocks)
         self.u_seq = np.repeat(plans, block_len, axis=1)  # (n_plans, horizon)
         du = np.abs(np.diff(plans, axis=1)).sum(axis=1)
@@ -229,12 +266,22 @@ class MPC(Controller):
         self.u_prev = 0.0
 
     def act(self, sim) -> float:
-        mean, sig = sim.est.forecast(sim.I_now, self.u_seq)
-        excess = (mean + self.k_sigma * sig - self.limit).max(axis=1)
         cost = self.base_cost + self.w_du * np.abs(self.first - self.u_prev)
-        feasible = excess <= 0.0
-        if self.backup is not None:
-            feasible &= self.backup.ok(sim, self.levels)[self.first_idx]
+        if self.preview:
+            H = self.u_seq.shape[1]
+            I_known = sim.ep.I[sim.k : sim.k + H]
+            I_seq = np.concatenate([I_known, np.full(H - len(I_known), I_known[-1])])
+            mean, sig, m_end, P_end = sim.est.forecast(I_seq, self.u_seq, return_final=True)
+            excess = (mean + self.k_sigma * sig - self.limit).max(axis=1)
+            if self.backup is not None:  # a burst may start right after the known window
+                excess = np.maximum(excess, self.backup.burst_worst(sim.est, m_end, P_end) - self.limit)
+            feasible = excess <= 0.0
+        else:
+            mean, sig = sim.est.forecast(sim.I_now, self.u_seq)
+            excess = (mean + self.k_sigma * sig - self.limit).max(axis=1)
+            feasible = excess <= 0.0
+            if self.backup is not None:
+                feasible &= self.backup.ok(sim, self.levels)[self.first_idx]
         i = np.argmin(np.where(feasible, cost, np.inf)) if feasible.any() else np.argmin(excess)
         self.u_prev = float(self.first[i])
         return self.u_prev
@@ -293,8 +340,11 @@ def make_controller(name: str) -> Controller:
         "shield_only": ShieldOnly,
         "shield_only_nobackup": lambda: ShieldOnly(Shield(backup=False)),
         "mpc": MPC,
+        "mpc_preview": lambda: MPC(preview=True),
+        "pid40_shield": lambda: PIDShield(40.0),
     }
     return factories[name]()
 
 
-BASELINES = ["always_on", "pid", "oracle_pid", "shield_only_nobackup", "shield_only", "mpc"]
+BASELINES = ["always_on", "pid", "oracle_pid", "pid40_shield", "shield_only_nobackup", "shield_only", "mpc",
+             "mpc_preview"]

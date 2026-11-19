@@ -273,3 +273,32 @@ def test_true_core_temperature_is_not_observed():
         b = ObsBuilder(mode)(sim)
         sim.x[0] -= 5.0
         np.testing.assert_array_equal(a, b)
+
+
+def test_forecast_with_per_step_current_matches_repeated_predict():
+    kf = KalmanFilter(augment=True)
+    kf.predict(10.0, 0.5)
+    kf.update(26.0)
+    I_seq = np.array([5.0, 25.0, 25.0, 12.0])
+    u_seq = np.array([[0.0, 0.4, 1.0, 0.2]])
+    mean, sig, m_end, P_end = kf.forecast(I_seq, u_seq, return_final=True)
+    ref = KalmanFilter(augment=True)
+    ref.x, ref.P = kf.x.copy(), kf.P.copy()
+    for t, (I, u) in enumerate(zip(I_seq, u_seq[0])):
+        ref.predict(I, u)
+        assert mean[0, t] == pytest.approx(ref.Tc_hat)
+        assert sig[0, t] == pytest.approx(ref.sigma_Tc)
+    np.testing.assert_allclose(m_end[0], ref.x)
+    np.testing.assert_allclose(P_end[0], ref.P)
+
+
+def test_mpc_preview_runs_and_is_safe_on_nominal():
+    from controllers import MPC
+
+    sim = ThermalSim(SCENARIOS["nominal"], KalmanFilter(augment=True))
+    sim.reset(0)
+    c = MPC(preview=True)
+    c.reset()
+    for _ in range(200):
+        sim.step(c.act(sim))
+    assert np.nanmax(sim.hist["Tc"]) < 45.0

@@ -5,183 +5,223 @@ Energy is pump-seconds at full power (always on = 1800). Degree-seconds = ∫ ma
 
 ### Cooling energy (pump-seconds)
 
-| controller                |   nominal |   heat_mismatch |   resistance_mismatch |   noisy |   outage |   ageing |   long_bursts |
-|:--------------------------|----------:|----------------:|----------------------:|--------:|---------:|---------:|--------------:|
-| always_on                 |      1800 |            1800 |                  1800 |    1800 |     1800 |     1800 |          1800 |
-| pid                       |        31 |             185 |                    20 |      36 |       31 |      133 |            71 |
-| oracle_pid                |        30 |             184 |                    55 |      30 |       30 |      139 |            70 |
-| shield_only_nobackup      |        64 |             349 |                    37 |      98 |       67 |      258 |           131 |
-| shield_only               |       237 |            1471 |                   125 |     331 |      256 |      889 |           369 |
-| mpc                       |       245 |            1491 |                   119 |     336 |      265 |      901 |           380 |
-| ppo                       |        23 |              49 |                    16 |      26 |       26 |       45 |            46 |
-| ppo+shield                |       194 |            1465 |                   110 |     274 |      218 |      860 |           325 |
-| ppo_dr                    |        39 |             167 |                    28 |      47 |       44 |      121 |            83 |
-| ppo_dr+shield             |       174 |            1471 |                   109 |     247 |      201 |      872 |           302 |
-| ppo_dr_nosigma            |        30 |             155 |                    19 |      33 |       28 |      115 |            64 |
-| ppo_dr_nosigma+shield     |       210 |            1471 |                   112 |     293 |      229 |      887 |           342 |
-| ppo_dr_raw                |       206 |             404 |                   193 |     241 |      194 |      329 |           344 |
-| ppo_dr_raw+shield         |       288 |            1461 |                   267 |     346 |      285 |      778 |           428 |
-| ppo_dr_shieldtrain        |         3 |             397 |                     3 |       9 |        7 |      111 |             4 |
-| ppo_dr_shieldtrain+shield |       235 |            1461 |                   124 |     329 |      253 |      883 |           366 |
+| controller                   |   nominal |   heat_mismatch |   resistance_mismatch |   noisy |   outage |   ageing |   long_bursts |
+|:-----------------------------|----------:|----------------:|----------------------:|--------:|---------:|---------:|--------------:|
+| always_on                    |      1800 |            1800 |                  1800 |    1800 |     1800 |     1800 |          1800 |
+| pid                          |        31 |             185 |                    20 |      36 |       31 |      133 |            71 |
+| oracle_pid                   |        30 |             184 |                    55 |      30 |       30 |      139 |            70 |
+| pid40_shield                 |       211 |            1471 |                   120 |     298 |      233 |      889 |           342 |
+| shield_only_nobackup         |        64 |             349 |                    37 |      98 |       67 |      258 |           131 |
+| shield_only                  |       237 |            1471 |                   125 |     331 |      256 |      889 |           369 |
+| mpc                          |       245 |            1491 |                   119 |     336 |      265 |      901 |           380 |
+| mpc_preview                  |       190 |            1526 |                   120 |     273 |      203 |      865 |           315 |
+| ppo                          |        16 |              28 |                     9 |      19 |       19 |       27 |            32 |
+| ppo+shield                   |       206 |            1463 |                   111 |     287 |      227 |      860 |           338 |
+| ppo_dr                       |        38 |             173 |                    27 |      51 |       44 |      130 |            80 |
+| ppo_dr+shield                |       178 |            1471 |                   109 |     255 |      205 |      875 |           308 |
+| ppo_dr_nosigma               |        34 |             123 |                    19 |      39 |       33 |      120 |            73 |
+| ppo_dr_nosigma+shield        |       189 |            1467 |                   105 |     268 |      214 |      881 |           321 |
+| ppo_dr_raw                   |       301 |             486 |                   288 |     333 |      273 |      415 |           449 |
+| ppo_dr_raw+shield            |       382 |            1459 |                   361 |     437 |      361 |      811 |           530 |
+| ppo_dr_shieldtrain           |         7 |             635 |                     5 |      14 |       12 |      229 |            12 |
+| ppo_dr_shieldtrain+shield    |       229 |            1460 |                   121 |     320 |      247 |      872 |           360 |
+| ppo_dr_shieldtrain_p1        |        37 |            1216 |                    15 |      58 |       89 |      619 |            86 |
+| ppo_dr_shieldtrain_p1+shield |       223 |            1477 |                   120 |     318 |      255 |      893 |           355 |
 
 
 ### Degree-seconds above 45 °C
 
-| controller                |   nominal |   heat_mismatch |   resistance_mismatch |   noisy |   outage |   ageing |   long_bursts |
-|:--------------------------|----------:|----------------:|----------------------:|--------:|---------:|---------:|--------------:|
-| always_on                 |       0   |             0   |                   0   |     0   |      0   |      0   |           0   |
-| pid                       |       0   |            31.9 |                  62.4 |     0   |      0   |     34.2 |           0   |
-| oracle_pid                |       0   |            31.2 |                   0   |     0   |      0   |     28.2 |           0   |
-| shield_only_nobackup      |       0   |             6   |                  51.4 |     0   |      0   |     12.2 |           0   |
-| shield_only               |       0   |             0   |                  14.7 |     0   |      0   |      0.3 |           0   |
-| mpc                       |       0   |             0   |                   6.6 |     0   |      0   |      0.3 |           0   |
-| ppo                       |       0   |           641.8 |                  81.9 |     0   |      9.1 |    364   |          10.9 |
-| ppo+shield                |       0   |             0   |                   6.5 |     0   |      0   |      0.3 |           0   |
-| ppo_dr                    |       0   |            28.7 |                  10.6 |     0   |      2   |     34.2 |          12.4 |
-| ppo_dr+shield             |       0   |             0   |                   1.1 |     0   |      0   |      0.3 |           0   |
-| ppo_dr_nosigma            |       0   |            17.1 |                  35.2 |     0   |      0   |     26.1 |           3.9 |
-| ppo_dr_nosigma+shield     |       0   |             0   |                   6.9 |     0   |      0   |      0.3 |           0   |
-| ppo_dr_raw                |       0   |             0   |                   0   |     0   |      0   |      1   |           0   |
-| ppo_dr_raw+shield         |       0   |             0   |                   0   |     0   |      0   |      0.1 |           0   |
-| ppo_dr_shieldtrain        |    1390.8 |            52.1 |                2081   |  1365.4 |   1448.5 |    594.3 |        3310.1 |
-| ppo_dr_shieldtrain+shield |       0   |             0   |                  14.9 |     0   |      0   |      0.3 |           0   |
+| controller                   |   nominal |   heat_mismatch |   resistance_mismatch |   noisy |   outage |   ageing |   long_bursts |
+|:-----------------------------|----------:|----------------:|----------------------:|--------:|---------:|---------:|--------------:|
+| always_on                    |       0   |             0   |                   0   |     0   |      0   |      0   |           0   |
+| pid                          |       0   |            31.9 |                  62.4 |     0   |      0   |     34.2 |           0   |
+| oracle_pid                   |       0   |            31.2 |                   0   |     0   |      0   |     28.2 |           0   |
+| pid40_shield                 |       0   |             0   |                   0   |     0   |      0   |      0.3 |           0   |
+| shield_only_nobackup         |       0   |             6   |                  51.4 |     0   |      0   |     12.2 |           0   |
+| shield_only                  |       0   |             0   |                  14.7 |     0   |      0   |      0.3 |           0   |
+| mpc                          |       0   |             0   |                   6.6 |     0   |      0   |      0.3 |           0   |
+| mpc_preview                  |       0   |             0   |                   3.5 |     0   |      0   |      0.2 |           0   |
+| ppo                          |       0.5 |           914.4 |                 190.6 |     1.1 |      4.7 |    476   |          37.3 |
+| ppo+shield                   |       0   |             0   |                   9.2 |     0   |      0   |      0.3 |           0   |
+| ppo_dr                       |       0   |            37.2 |                   6.5 |     0   |      0   |     43.7 |          12.7 |
+| ppo_dr+shield                |       0   |             0   |                   0.7 |     0   |      0   |      0.3 |           0   |
+| ppo_dr_nosigma               |       0   |            16.4 |                  13.3 |     0   |      0   |     23.5 |           1   |
+| ppo_dr_nosigma+shield        |       0   |             0   |                   2.5 |     0   |      0   |      0.3 |           0   |
+| ppo_dr_raw                   |       0   |             0   |                   0   |     0   |      0   |      1.1 |           0   |
+| ppo_dr_raw+shield            |       0   |             0   |                   0   |     0   |      0   |      0.1 |           0   |
+| ppo_dr_shieldtrain           |     423.9 |             9.7 |                1080.3 |   400.6 |    422.6 |     50   |        1075.8 |
+| ppo_dr_shieldtrain+shield    |       0   |             0   |                  14.4 |     0   |      0   |      0.3 |           0   |
+| ppo_dr_shieldtrain_p1        |     188.3 |             0   |                 742.7 |   170.9 |    131.4 |      5.6 |         336.5 |
+| ppo_dr_shieldtrain_p1+shield |       0   |             0   |                  11.4 |     0   |      0   |      0.3 |           0   |
 
 
 ### Episodes with any violation (%)
 
-| controller                |   nominal |   heat_mismatch |   resistance_mismatch |   noisy |   outage |   ageing |   long_bursts |
-|:--------------------------|----------:|----------------:|----------------------:|--------:|---------:|---------:|--------------:|
-| always_on                 |         0 |               0 |                     0 |       0 |        0 |        5 |             0 |
-| pid                       |         0 |              85 |                    80 |       0 |        0 |       75 |             0 |
-| oracle_pid                |         0 |              85 |                     5 |       0 |        0 |       70 |             0 |
-| shield_only_nobackup      |         0 |              40 |                    80 |       0 |        0 |       40 |             0 |
-| shield_only               |         0 |               0 |                    65 |       0 |        0 |        5 |             0 |
-| mpc                       |         0 |               0 |                    60 |       0 |        0 |        5 |             0 |
-| ppo                       |         0 |              82 |                    50 |       0 |       15 |       65 |            18 |
-| ppo+shield                |         0 |               0 |                    38 |       0 |        0 |        5 |             0 |
-| ppo_dr                    |         2 |              43 |                    32 |       0 |        8 |       37 |            13 |
-| ppo_dr+shield             |         0 |               0 |                    22 |       0 |        0 |        5 |             0 |
-| ppo_dr_nosigma            |         0 |              47 |                    52 |       0 |        0 |       42 |            13 |
-| ppo_dr_nosigma+shield     |         0 |               0 |                    40 |       0 |        0 |        5 |             0 |
-| ppo_dr_raw                |         0 |               0 |                     0 |       0 |        0 |        5 |             0 |
-| ppo_dr_raw+shield         |         0 |               0 |                     0 |       0 |        0 |        5 |             0 |
-| ppo_dr_shieldtrain        |        85 |              38 |                    88 |      83 |       83 |       83 |           100 |
-| ppo_dr_shieldtrain+shield |         0 |               0 |                    65 |       0 |        0 |        5 |             0 |
+| controller                   |   nominal |   heat_mismatch |   resistance_mismatch |   noisy |   outage |   ageing |   long_bursts |
+|:-----------------------------|----------:|----------------:|----------------------:|--------:|---------:|---------:|--------------:|
+| always_on                    |         0 |               0 |                     0 |       0 |        0 |        5 |             0 |
+| pid                          |         0 |              85 |                    80 |       0 |        0 |       75 |             0 |
+| oracle_pid                   |         0 |              85 |                     5 |       0 |        0 |       70 |             0 |
+| pid40_shield                 |         0 |               0 |                     0 |       0 |        0 |        5 |             0 |
+| shield_only_nobackup         |         0 |              40 |                    80 |       0 |        0 |       40 |             0 |
+| shield_only                  |         0 |               0 |                    65 |       0 |        0 |        5 |             0 |
+| mpc                          |         0 |               0 |                    60 |       0 |        0 |        5 |             0 |
+| mpc_preview                  |         0 |               0 |                    55 |       0 |        0 |        5 |             0 |
+| ppo                          |         3 |              87 |                    70 |       8 |       27 |       75 |            37 |
+| ppo+shield                   |         0 |               0 |                    47 |       0 |        0 |        5 |             0 |
+| ppo_dr                       |         2 |              50 |                    30 |       0 |        2 |       40 |            13 |
+| ppo_dr+shield                |         0 |               0 |                    18 |       0 |        0 |        5 |             0 |
+| ppo_dr_nosigma               |         0 |              52 |                    52 |       0 |        0 |       42 |             5 |
+| ppo_dr_nosigma+shield        |         0 |               0 |                    38 |       0 |        0 |        5 |             0 |
+| ppo_dr_raw                   |         0 |               0 |                     0 |       0 |        0 |        7 |             0 |
+| ppo_dr_raw+shield            |         0 |               0 |                     0 |       0 |        0 |        5 |             0 |
+| ppo_dr_shieldtrain           |        75 |              18 |                    87 |      73 |       78 |       55 |            93 |
+| ppo_dr_shieldtrain+shield    |         0 |               0 |                    60 |       0 |        0 |        5 |             0 |
+| ppo_dr_shieldtrain_p1        |        42 |               0 |                    82 |      48 |       35 |       22 |            65 |
+| ppo_dr_shieldtrain_p1+shield |         0 |               0 |                    60 |       0 |        0 |        5 |             0 |
 
 
 ### Full table
 
-| scenario            | controller                | energy     | % steps > 45 °C   |   P(any violation) % | degree-s > 45 °C   | max Tc (°C)   | shield active (% steps)   |
-|:--------------------|:--------------------------|:-----------|:------------------|---------------------:|:-------------------|:--------------|:--------------------------|
-| nominal             | always_on                 | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 37.7 ± 1.3    | –                         |
-| nominal             | pid                       | 31 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
-| nominal             | oracle_pid                | 30 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
-| nominal             | shield_only_nobackup      | 64 ± 44    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.4 ± 0.3    | 23.7                      |
-| nominal             | shield_only               | 237 ± 93   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.4    | 34.9                      |
-| nominal             | mpc                       | 245 ± 95   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.0 ± 0.4    | –                         |
-| nominal             | ppo                       | 23 ± 6     | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.1 ± 0.4    | –                         |
-| nominal             | ppo+shield                | 194 ± 13   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.1    | 18.5                      |
-| nominal             | ppo_dr                    | 39 ± 27    | 0.02 ± 0.04       |                    2 | 0.0 ± 0.0          | 42.5 ± 1.0    | –                         |
-| nominal             | ppo_dr+shield             | 174 ± 10   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.6 ± 0.2    | 13.0                      |
-| nominal             | ppo_dr_nosigma            | 30 ± 18    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.1 ± 0.8    | –                         |
-| nominal             | ppo_dr_nosigma+shield     | 210 ± 27   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.1    | 21.9                      |
-| nominal             | ppo_dr_raw                | 206 ± 47   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.4 ± 0.3    | –                         |
-| nominal             | ppo_dr_raw+shield         | 288 ± 46   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.4 ± 0.3    | 4.8                       |
-| nominal             | ppo_dr_shieldtrain        | 3 ± 4      | 27.69 ± 9.68      |                   85 | 1390.8 ± 1185.3    | 49.0 ± 2.2    | –                         |
-| nominal             | ppo_dr_shieldtrain+shield | 235 ± 4    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.0    | 34.2                      |
-| heat_mismatch       | always_on                 | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.6 ± 1.7    | –                         |
-| heat_mismatch       | pid                       | 185 ± 95   | 4.46 ± 3.76       |                   85 | 31.9 ± 32.1        | 45.5 ± 0.6    | –                         |
-| heat_mismatch       | oracle_pid                | 184 ± 96   | 4.44 ± 3.73       |                   85 | 31.2 ± 32.5        | 45.5 ± 0.6    | –                         |
-| heat_mismatch       | shield_only_nobackup      | 349 ± 166  | 1.23 ± 1.71       |                   40 | 6.0 ± 10.2         | 44.8 ± 0.8    | 37.4                      |
-| heat_mismatch       | shield_only               | 1471 ± 178 | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 1.5    | 90.3                      |
-| heat_mismatch       | mpc                       | 1491 ± 172 | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 1.5    | –                         |
-| heat_mismatch       | ppo                       | 49 ± 45    | 15.33 ± 17.06     |                   82 | 641.8 ± 917.0      | 47.3 ± 2.9    | –                         |
-| heat_mismatch       | ppo+shield                | 1465 ± 6   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 87.5                      |
-| heat_mismatch       | ppo_dr                    | 167 ± 124  | 2.06 ± 2.13       |                   43 | 28.7 ± 33.0        | 44.7 ± 1.0    | –                         |
-| heat_mismatch       | ppo_dr+shield             | 1471 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 90.1                      |
-| heat_mismatch       | ppo_dr_nosigma            | 155 ± 76   | 1.67 ± 1.25       |                   47 | 17.1 ± 14.2        | 44.7 ± 0.7    | –                         |
-| heat_mismatch       | ppo_dr_nosigma+shield     | 1471 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 90.1                      |
-| heat_mismatch       | ppo_dr_raw                | 404 ± 82   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.8 ± 0.3    | –                         |
-| heat_mismatch       | ppo_dr_raw+shield         | 1461 ± 4   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 84.9                      |
-| heat_mismatch       | ppo_dr_shieldtrain        | 397 ± 367  | 2.54 ± 4.07       |                   38 | 52.1 ± 87.0        | 44.0 ± 2.1    | –                         |
-| heat_mismatch       | ppo_dr_shieldtrain+shield | 1461 ± 8   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.1    | 80.4                      |
-| resistance_mismatch | always_on                 | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 38.9 ± 1.6    | –                         |
-| resistance_mismatch | pid                       | 20 ± 14    | 7.13 ± 5.10       |                   80 | 62.4 ± 56.1        | 45.5 ± 1.0    | –                         |
-| resistance_mismatch | oracle_pid                | 55 ± 36    | 0.03 ± 0.15       |                    5 | 0.0 ± 0.1          | 44.3 ± 0.6    | –                         |
-| resistance_mismatch | shield_only_nobackup      | 37 ± 27    | 8.84 ± 6.16       |                   80 | 51.4 ± 40.6        | 45.3 ± 0.8    | 24.2                      |
-| resistance_mismatch | shield_only               | 125 ± 57   | 3.36 ± 3.37       |                   65 | 14.7 ± 17.4        | 44.9 ± 0.9    | 35.2                      |
-| resistance_mismatch | mpc                       | 119 ± 54   | 2.27 ± 2.43       |                   60 | 6.6 ± 8.3          | 44.8 ± 0.8    | –                         |
-| resistance_mismatch | ppo                       | 16 ± 10    | 5.21 ± 6.07       |                   50 | 81.9 ± 113.4       | 45.0 ± 1.3    | –                         |
-| resistance_mismatch | ppo+shield                | 110 ± 7    | 1.62 ± 1.47       |                   38 | 6.5 ± 6.2          | 44.3 ± 0.7    | 12.2                      |
-| resistance_mismatch | ppo_dr                    | 28 ± 16    | 1.04 ± 1.40       |                   32 | 10.6 ± 16.0        | 44.1 ± 0.8    | –                         |
-| resistance_mismatch | ppo_dr+shield             | 109 ± 10   | 0.42 ± 0.70       |                   22 | 1.1 ± 1.9          | 43.8 ± 0.6    | 6.7                       |
-| resistance_mismatch | ppo_dr_nosigma            | 19 ± 11    | 3.43 ± 2.84       |                   52 | 35.2 ± 33.8        | 44.9 ± 0.7    | –                         |
-| resistance_mismatch | ppo_dr_nosigma+shield     | 112 ± 2    | 1.71 ± 1.41       |                   40 | 6.9 ± 5.8          | 44.5 ± 0.5    | 11.0                      |
-| resistance_mismatch | ppo_dr_raw                | 193 ± 45   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.7 ± 0.3    | –                         |
-| resistance_mismatch | ppo_dr_raw+shield         | 267 ± 45   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.7 ± 0.3    | 4.3                       |
-| resistance_mismatch | ppo_dr_shieldtrain        | 3 ± 4      | 34.14 ± 5.98      |                   88 | 2081.0 ± 1064.9    | 50.4 ± 1.8    | –                         |
-| resistance_mismatch | ppo_dr_shieldtrain+shield | 124 ± 2    | 3.35 ± 0.01       |                   65 | 14.9 ± 0.4         | 44.9 ± 0.0    | 34.3                      |
-| noisy               | always_on                 | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 37.7 ± 1.3    | –                         |
-| noisy               | pid                       | 36 ± 24    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.6    | –                         |
-| noisy               | oracle_pid                | 30 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
-| noisy               | shield_only_nobackup      | 98 ± 59    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.6 ± 0.4    | 23.0                      |
-| noisy               | shield_only               | 331 ± 109  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.8    | 34.5                      |
-| noisy               | mpc                       | 336 ± 113  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.7    | –                         |
-| noisy               | ppo                       | 26 ± 7     | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.1 ± 0.4    | –                         |
-| noisy               | ppo+shield                | 274 ± 19   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.2    | 20.5                      |
-| noisy               | ppo_dr                    | 47 ± 24    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.5 ± 0.9    | –                         |
-| noisy               | ppo_dr+shield             | 247 ± 16   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.6 ± 0.3    | 16.7                      |
-| noisy               | ppo_dr_nosigma            | 33 ± 21    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.1 ± 0.8    | –                         |
-| noisy               | ppo_dr_nosigma+shield     | 293 ± 31   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.3    | 23.5                      |
-| noisy               | ppo_dr_raw                | 241 ± 60   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.5 ± 0.3    | –                         |
-| noisy               | ppo_dr_raw+shield         | 346 ± 57   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.4 ± 0.3    | 6.6                       |
-| noisy               | ppo_dr_shieldtrain        | 9 ± 4      | 27.26 ± 9.91      |                   83 | 1365.4 ± 1168.8    | 49.0 ± 2.2    | –                         |
-| noisy               | ppo_dr_shieldtrain+shield | 329 ± 4    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.0    | 33.1                      |
-| outage              | always_on                 | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 37.7 ± 1.3    | –                         |
-| outage              | pid                       | 31 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
-| outage              | oracle_pid                | 30 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
-| outage              | shield_only_nobackup      | 67 ± 45    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.4 ± 0.3    | 23.6                      |
-| outage              | shield_only               | 256 ± 108  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.5    | 35.6                      |
-| outage              | mpc                       | 265 ± 113  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.5    | –                         |
-| outage              | ppo                       | 26 ± 6     | 0.66 ± 1.08       |                   15 | 9.1 ± 15.6         | 43.9 ± 0.7    | –                         |
-| outage              | ppo+shield                | 218 ± 12   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.0    | 21.7                      |
-| outage              | ppo_dr                    | 44 ± 36    | 0.28 ± 0.48       |                    8 | 2.0 ± 3.4          | 42.9 ± 1.0    | –                         |
-| outage              | ppo_dr+shield             | 201 ± 10   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.6 ± 0.2    | 16.4                      |
-| outage              | ppo_dr_nosigma            | 28 ± 15    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.2 ± 0.4    | –                         |
-| outage              | ppo_dr_nosigma+shield     | 229 ± 22   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.1    | 23.1                      |
-| outage              | ppo_dr_raw                | 194 ± 31   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.3 ± 0.3    | –                         |
-| outage              | ppo_dr_raw+shield         | 285 ± 31   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.0 ± 0.1    | 6.2                       |
-| outage              | ppo_dr_shieldtrain        | 7 ± 7      | 27.30 ± 10.79     |                   83 | 1448.5 ± 1162.4    | 49.2 ± 2.2    | –                         |
-| outage              | ppo_dr_shieldtrain+shield | 253 ± 4    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 34.6                      |
-| ageing              | always_on                 | 1800 ± 0   | 0.01 ± 0.02       |                    5 | 0.0 ± 0.0          | 40.8 ± 2.3    | –                         |
-| ageing              | pid                       | 133 ± 81   | 3.56 ± 3.81       |                   75 | 34.2 ± 52.7        | 45.4 ± 0.7    | –                         |
-| ageing              | oracle_pid                | 139 ± 84   | 3.12 ± 3.64       |                   70 | 28.2 ± 48.0        | 45.3 ± 0.7    | –                         |
-| ageing              | shield_only_nobackup      | 258 ± 129  | 1.51 ± 2.54       |                   40 | 12.2 ± 26.0        | 44.8 ± 0.8    | 31.9                      |
-| ageing              | shield_only               | 889 ± 210  | 0.09 ± 0.42       |                    5 | 0.3 ± 1.5          | 42.2 ± 1.5    | 62.5                      |
-| ageing              | mpc                       | 901 ± 216  | 0.09 ± 0.42       |                    5 | 0.3 ± 1.5          | 42.2 ± 1.4    | –                         |
-| ageing              | ppo                       | 45 ± 34    | 9.17 ± 11.02      |                   65 | 364.0 ± 503.0      | 46.6 ± 2.7    | –                         |
-| ageing              | ppo+shield                | 860 ± 23   | 0.08 ± 0.01       |                    5 | 0.3 ± 0.1          | 42.1 ± 0.1    | 56.0                      |
-| ageing              | ppo_dr                    | 121 ± 91   | 1.92 ± 1.70       |                   37 | 34.2 ± 34.4        | 44.5 ± 1.0    | –                         |
-| ageing              | ppo_dr+shield             | 872 ± 2    | 0.09 ± 0.00       |                    5 | 0.3 ± 0.0          | 42.1 ± 0.0    | 59.0                      |
-| ageing              | ppo_dr_nosigma            | 115 ± 63   | 1.87 ± 1.17       |                   42 | 26.1 ± 17.6        | 44.7 ± 0.8    | –                         |
-| ageing              | ppo_dr_nosigma+shield     | 887 ± 3    | 0.09 ± 0.00       |                    5 | 0.3 ± 0.0          | 42.2 ± 0.0    | 61.4                      |
-| ageing              | ppo_dr_raw                | 329 ± 67   | 0.17 ± 0.05       |                    5 | 1.0 ± 0.6          | 42.1 ± 0.3    | –                         |
-| ageing              | ppo_dr_raw+shield         | 778 ± 4    | 0.06 ± 0.00       |                    5 | 0.1 ± 0.0          | 41.5 ± 0.1    | 40.1                      |
-| ageing              | ppo_dr_shieldtrain        | 111 ± 114  | 17.18 ± 5.07      |                   83 | 594.3 ± 261.2      | 47.6 ± 0.7    | –                         |
-| ageing              | ppo_dr_shieldtrain+shield | 883 ± 5    | 0.09 ± 0.00       |                    5 | 0.3 ± 0.0          | 42.2 ± 0.0    | 59.2                      |
-| long_bursts         | always_on                 | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.5 ± 1.3    | –                         |
-| long_bursts         | pid                       | 71 ± 54    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 44.1 ± 0.3    | –                         |
-| long_bursts         | oracle_pid                | 70 ± 52    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 44.2 ± 0.3    | –                         |
-| long_bursts         | shield_only_nobackup      | 131 ± 108  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.5 ± 0.1    | 37.2                      |
-| long_bursts         | shield_only               | 369 ± 189  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.3    | 47.1                      |
-| long_bursts         | mpc                       | 380 ± 188  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.3    | –                         |
-| long_bursts         | ppo                       | 46 ± 14    | 1.29 ± 1.17       |                   18 | 10.9 ± 10.3        | 44.1 ± 0.5    | –                         |
-| long_bursts         | ppo+shield                | 325 ± 13   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.1 ± 0.0    | 29.1                      |
-| long_bursts         | ppo_dr                    | 83 ± 65    | 1.14 ± 1.89       |                   13 | 12.4 ± 21.3        | 43.5 ± 1.3    | –                         |
-| long_bursts         | ppo_dr+shield             | 302 ± 14   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.0 ± 0.2    | 22.4                      |
-| long_bursts         | ppo_dr_nosigma            | 64 ± 34    | 0.72 ± 0.90       |                   13 | 3.9 ± 6.0          | 43.8 ± 0.8    | –                         |
-| long_bursts         | ppo_dr_nosigma+shield     | 342 ± 28   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.1 ± 0.1    | 32.0                      |
-| long_bursts         | ppo_dr_raw                | 344 ± 69   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.7 ± 0.3    | –                         |
-| long_bursts         | ppo_dr_raw+shield         | 428 ± 65   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.7 ± 0.3    | 5.7                       |
-| long_bursts         | ppo_dr_shieldtrain        | 4 ± 5      | 43.76 ± 10.10     |                  100 | 3310.1 ± 2621.6    | 51.7 ± 3.6    | –                         |
-| long_bursts         | ppo_dr_shieldtrain+shield | 366 ± 4    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.0    | 46.5                      |
+| scenario            | controller                   | energy     | % steps > 45 °C   |   P(any violation) % | degree-s > 45 °C   | max Tc (°C)   | shield active (% steps)   |
+|:--------------------|:-----------------------------|:-----------|:------------------|---------------------:|:-------------------|:--------------|:--------------------------|
+| nominal             | always_on                    | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 37.7 ± 1.3    | –                         |
+| nominal             | pid                          | 31 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
+| nominal             | oracle_pid                   | 30 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
+| nominal             | pid40_shield                 | 211 ± 80   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.4    | 20.3                      |
+| nominal             | shield_only_nobackup         | 64 ± 44    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.4 ± 0.3    | 23.7                      |
+| nominal             | shield_only                  | 237 ± 93   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.4    | 34.9                      |
+| nominal             | mpc                          | 245 ± 95   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.0 ± 0.4    | –                         |
+| nominal             | mpc_preview                  | 190 ± 77   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.6 ± 0.5    | –                         |
+| nominal             | ppo                          | 16 ± 2     | 0.09 ± 0.13       |                    3 | 0.5 ± 0.8          | 43.6 ± 0.2    | –                         |
+| nominal             | ppo+shield                   | 206 ± 25   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.1    | 23.4                      |
+| nominal             | ppo_dr                       | 38 ± 18    | 0.02 ± 0.04       |                    2 | 0.0 ± 0.0          | 42.6 ± 0.8    | –                         |
+| nominal             | ppo_dr+shield                | 178 ± 7    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.1    | 13.6                      |
+| nominal             | ppo_dr_nosigma               | 34 ± 12    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.7 ± 0.5    | –                         |
+| nominal             | ppo_dr_nosigma+shield        | 189 ± 17   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.1    | 16.0                      |
+| nominal             | ppo_dr_raw                   | 301 ± 85   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.0 ± 0.3    | –                         |
+| nominal             | ppo_dr_raw+shield            | 382 ± 84   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.0 ± 0.3    | 4.7                       |
+| nominal             | ppo_dr_shieldtrain           | 7 ± 6      | 13.49 ± 13.53     |                   75 | 423.9 ± 558.7      | 46.5 ± 1.6    | –                         |
+| nominal             | ppo_dr_shieldtrain+shield    | 229 ± 15   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.0    | 33.1                      |
+| nominal             | ppo_dr_shieldtrain_p1        | 37 ± 15    | 8.61 ± 14.16      |                   42 | 188.3 ± 318.7      | 44.9 ± 1.5    | –                         |
+| nominal             | ppo_dr_shieldtrain_p1+shield | 223 ± 28   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.1    | 24.1                      |
+| heat_mismatch       | always_on                    | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.6 ± 1.7    | –                         |
+| heat_mismatch       | pid                          | 185 ± 95   | 4.46 ± 3.76       |                   85 | 31.9 ± 32.1        | 45.5 ± 0.6    | –                         |
+| heat_mismatch       | oracle_pid                   | 184 ± 96   | 4.44 ± 3.73       |                   85 | 31.2 ± 32.5        | 45.5 ± 0.6    | –                         |
+| heat_mismatch       | pid40_shield                 | 1471 ± 178 | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 1.5    | 90.0                      |
+| heat_mismatch       | shield_only_nobackup         | 349 ± 166  | 1.23 ± 1.71       |                   40 | 6.0 ± 10.2         | 44.8 ± 0.8    | 37.4                      |
+| heat_mismatch       | shield_only                  | 1471 ± 178 | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 1.5    | 90.3                      |
+| heat_mismatch       | mpc                          | 1491 ± 172 | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 1.5    | –                         |
+| heat_mismatch       | mpc_preview                  | 1526 ± 175 | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 1.5    | –                         |
+| heat_mismatch       | ppo                          | 28 ± 19    | 20.07 ± 16.77     |                   87 | 914.4 ± 1130.9     | 48.2 ± 2.6    | –                         |
+| heat_mismatch       | ppo+shield                   | 1463 ± 7   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 86.9                      |
+| heat_mismatch       | ppo_dr                       | 173 ± 127  | 2.38 ± 2.21       |                   50 | 37.2 ± 37.2        | 44.9 ± 1.0    | –                         |
+| heat_mismatch       | ppo_dr+shield                | 1471 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 90.0                      |
+| heat_mismatch       | ppo_dr_nosigma               | 123 ± 33   | 1.82 ± 0.76       |                   52 | 16.4 ± 9.5         | 44.8 ± 0.2    | –                         |
+| heat_mismatch       | ppo_dr_nosigma+shield        | 1467 ± 6   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 88.5                      |
+| heat_mismatch       | ppo_dr_raw                   | 486 ± 162  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.6 ± 0.4    | –                         |
+| heat_mismatch       | ppo_dr_raw+shield            | 1459 ± 4   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.0    | 81.3                      |
+| heat_mismatch       | ppo_dr_shieldtrain           | 635 ± 432  | 0.72 ± 1.24       |                   18 | 9.7 ± 16.8         | 43.2 ± 1.5    | –                         |
+| heat_mismatch       | ppo_dr_shieldtrain+shield    | 1460 ± 3   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.0    | 60.7                      |
+| heat_mismatch       | ppo_dr_shieldtrain_p1        | 1216 ± 26  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.0    | –                         |
+| heat_mismatch       | ppo_dr_shieldtrain_p1+shield | 1477 ± 5   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 19.5                      |
+| resistance_mismatch | always_on                    | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 38.9 ± 1.6    | –                         |
+| resistance_mismatch | pid                          | 20 ± 14    | 7.13 ± 5.10       |                   80 | 62.4 ± 56.1        | 45.5 ± 1.0    | –                         |
+| resistance_mismatch | oracle_pid                   | 55 ± 36    | 0.03 ± 0.15       |                    5 | 0.0 ± 0.1          | 44.3 ± 0.6    | –                         |
+| resistance_mismatch | pid40_shield                 | 120 ± 49   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 44.0 ± 0.8    | 4.8                       |
+| resistance_mismatch | shield_only_nobackup         | 37 ± 27    | 8.84 ± 6.16       |                   80 | 51.4 ± 40.6        | 45.3 ± 0.8    | 24.2                      |
+| resistance_mismatch | shield_only                  | 125 ± 57   | 3.36 ± 3.37       |                   65 | 14.7 ± 17.4        | 44.9 ± 0.9    | 35.2                      |
+| resistance_mismatch | mpc                          | 119 ± 54   | 2.27 ± 2.43       |                   60 | 6.6 ± 8.3          | 44.8 ± 0.8    | –                         |
+| resistance_mismatch | mpc_preview                  | 120 ± 50   | 1.06 ± 1.28       |                   55 | 3.5 ± 4.8          | 44.8 ± 0.7    | –                         |
+| resistance_mismatch | ppo                          | 9 ± 5      | 9.61 ± 9.84       |                   70 | 190.6 ± 224.3      | 45.7 ± 1.3    | –                         |
+| resistance_mismatch | ppo+shield                   | 111 ± 11   | 2.16 ± 1.72       |                   47 | 9.2 ± 7.7          | 44.5 ± 0.5    | 19.0                      |
+| resistance_mismatch | ppo_dr                       | 27 ± 8     | 0.80 ± 0.90       |                   30 | 6.5 ± 8.8          | 44.2 ± 0.5    | –                         |
+| resistance_mismatch | ppo_dr+shield                | 109 ± 4    | 0.33 ± 0.46       |                   18 | 0.7 ± 1.1          | 44.0 ± 0.3    | 6.1                       |
+| resistance_mismatch | ppo_dr_nosigma               | 19 ± 4     | 1.75 ± 1.24       |                   52 | 13.3 ± 13.8        | 44.6 ± 0.3    | –                         |
+| resistance_mismatch | ppo_dr_nosigma+shield        | 105 ± 1    | 0.79 ± 0.69       |                   38 | 2.5 ± 2.4          | 44.4 ± 0.2    | 7.3                       |
+| resistance_mismatch | ppo_dr_raw                   | 288 ± 82   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.3 ± 0.3    | –                         |
+| resistance_mismatch | ppo_dr_raw+shield            | 361 ± 81   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.3 ± 0.3    | 4.2                       |
+| resistance_mismatch | ppo_dr_shieldtrain           | 5 ± 4      | 24.59 ± 11.40     |                   87 | 1080.3 ± 1041.2    | 48.4 ± 1.9    | –                         |
+| resistance_mismatch | ppo_dr_shieldtrain+shield    | 121 ± 6    | 3.28 ± 0.13       |                   60 | 14.4 ± 0.5         | 44.9 ± 0.1    | 31.7                      |
+| resistance_mismatch | ppo_dr_shieldtrain_p1        | 15 ± 3     | 20.38 ± 14.49     |                   82 | 742.7 ± 843.6      | 47.2 ± 1.7    | –                         |
+| resistance_mismatch | ppo_dr_shieldtrain_p1+shield | 120 ± 10   | 2.74 ± 0.88       |                   60 | 11.4 ± 5.0         | 44.8 ± 0.2    | 25.2                      |
+| noisy               | always_on                    | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 37.7 ± 1.3    | –                         |
+| noisy               | pid                          | 36 ± 24    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.6    | –                         |
+| noisy               | oracle_pid                   | 30 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
+| noisy               | pid40_shield                 | 298 ± 98   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.7    | 23.3                      |
+| noisy               | shield_only_nobackup         | 98 ± 59    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.6 ± 0.4    | 23.0                      |
+| noisy               | shield_only                  | 331 ± 109  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.8    | 34.5                      |
+| noisy               | mpc                          | 336 ± 113  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.7    | –                         |
+| noisy               | mpc_preview                  | 273 ± 100  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.5 ± 0.8    | –                         |
+| noisy               | ppo                          | 19 ± 6     | 0.19 ± 0.16       |                    8 | 1.1 ± 1.3          | 43.7 ± 0.3    | –                         |
+| noisy               | ppo+shield                   | 287 ± 32   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.2    | 24.1                      |
+| noisy               | ppo_dr                       | 51 ± 17    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.5 ± 0.6    | –                         |
+| noisy               | ppo_dr+shield                | 255 ± 11   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.6 ± 0.1    | 17.1                      |
+| noisy               | ppo_dr_nosigma               | 39 ± 17    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.7 ± 0.5    | –                         |
+| noisy               | ppo_dr_nosigma+shield        | 268 ± 22   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.1    | 19.1                      |
+| noisy               | ppo_dr_raw                   | 333 ± 113  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.1 ± 0.3    | –                         |
+| noisy               | ppo_dr_raw+shield            | 437 ± 109  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.1 ± 0.3    | 6.3                       |
+| noisy               | ppo_dr_shieldtrain           | 14 ± 5     | 13.05 ± 12.97     |                   73 | 400.6 ± 526.7      | 46.4 ± 1.6    | –                         |
+| noisy               | ppo_dr_shieldtrain+shield    | 320 ± 18   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.1 ± 0.0    | 32.3                      |
+| noisy               | ppo_dr_shieldtrain_p1        | 58 ± 22    | 8.44 ± 13.43      |                   48 | 170.9 ± 286.9      | 44.9 ± 1.5    | –                         |
+| noisy               | ppo_dr_shieldtrain_p1+shield | 318 ± 38   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.0 ± 0.2    | 19.6                      |
+| outage              | always_on                    | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 37.7 ± 1.3    | –                         |
+| outage              | pid                          | 31 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
+| outage              | oracle_pid                   | 30 ± 20    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.9 ± 0.5    | –                         |
+| outage              | pid40_shield                 | 233 ± 96   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.5    | 22.9                      |
+| outage              | shield_only_nobackup         | 67 ± 45    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.4 ± 0.3    | 23.6                      |
+| outage              | shield_only                  | 256 ± 108  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.5    | 35.6                      |
+| outage              | mpc                          | 265 ± 113  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.9 ± 0.5    | –                         |
+| outage              | mpc_preview                  | 203 ± 84   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.5 ± 0.5    | –                         |
+| outage              | ppo                          | 19 ± 4     | 0.78 ± 0.42       |                   27 | 4.7 ± 2.1          | 44.1 ± 0.3    | –                         |
+| outage              | ppo+shield                   | 227 ± 21   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.1    | 25.0                      |
+| outage              | ppo_dr                       | 44 ± 27    | 0.00 ± 0.00       |                    2 | 0.0 ± 0.0          | 42.8 ± 0.6    | –                         |
+| outage              | ppo_dr+shield                | 205 ± 9    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.6 ± 0.1    | 16.8                      |
+| outage              | ppo_dr_nosigma               | 33 ± 12    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.0 ± 0.1    | –                         |
+| outage              | ppo_dr_nosigma+shield        | 214 ± 14   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.0    | 19.6                      |
+| outage              | ppo_dr_raw                   | 273 ± 62   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.9 ± 0.5    | –                         |
+| outage              | ppo_dr_raw+shield            | 361 ± 62   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.7 ± 0.3    | 5.8                       |
+| outage              | ppo_dr_shieldtrain           | 12 ± 8     | 14.50 ± 11.44     |                   78 | 422.6 ± 451.7      | 46.8 ± 1.1    | –                         |
+| outage              | ppo_dr_shieldtrain+shield    | 247 ± 14   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.8 ± 0.0    | 33.3                      |
+| outage              | ppo_dr_shieldtrain_p1        | 89 ± 31    | 6.37 ± 10.68      |                   35 | 131.4 ± 226.4      | 44.5 ± 1.7    | –                         |
+| outage              | ppo_dr_shieldtrain_p1+shield | 255 ± 23   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 41.7 ± 0.1    | 21.3                      |
+| ageing              | always_on                    | 1800 ± 0   | 0.01 ± 0.02       |                    5 | 0.0 ± 0.0          | 40.8 ± 2.3    | –                         |
+| ageing              | pid                          | 133 ± 81   | 3.56 ± 3.81       |                   75 | 34.2 ± 52.7        | 45.4 ± 0.7    | –                         |
+| ageing              | oracle_pid                   | 139 ± 84   | 3.12 ± 3.64       |                   70 | 28.2 ± 48.0        | 45.3 ± 0.7    | –                         |
+| ageing              | pid40_shield                 | 889 ± 210  | 0.09 ± 0.42       |                    5 | 0.3 ± 1.5          | 42.2 ± 1.5    | 62.0                      |
+| ageing              | shield_only_nobackup         | 258 ± 129  | 1.51 ± 2.54       |                   40 | 12.2 ± 26.0        | 44.8 ± 0.8    | 31.9                      |
+| ageing              | shield_only                  | 889 ± 210  | 0.09 ± 0.42       |                    5 | 0.3 ± 1.5          | 42.2 ± 1.5    | 62.5                      |
+| ageing              | mpc                          | 901 ± 216  | 0.09 ± 0.42       |                    5 | 0.3 ± 1.5          | 42.2 ± 1.4    | –                         |
+| ageing              | mpc_preview                  | 865 ± 233  | 0.08 ± 0.35       |                    5 | 0.2 ± 1.0          | 42.1 ± 1.4    | –                         |
+| ageing              | ppo                          | 27 ± 21    | 11.69 ± 10.34     |                   75 | 476.0 ± 525.4      | 47.4 ± 2.4    | –                         |
+| ageing              | ppo+shield                   | 860 ± 38   | 0.08 ± 0.01       |                    5 | 0.3 ± 0.1          | 42.1 ± 0.2    | 56.6                      |
+| ageing              | ppo_dr                       | 130 ± 95   | 2.25 ± 1.90       |                   40 | 43.7 ± 42.6        | 44.6 ± 1.0    | –                         |
+| ageing              | ppo_dr+shield                | 875 ± 6    | 0.09 ± 0.00       |                    5 | 0.3 ± 0.0          | 42.1 ± 0.0    | 59.0                      |
+| ageing              | ppo_dr_nosigma               | 120 ± 26   | 1.58 ± 0.31       |                   42 | 23.5 ± 9.0         | 44.5 ± 0.1    | –                         |
+| ageing              | ppo_dr_nosigma+shield        | 881 ± 7    | 0.09 ± 0.00       |                    5 | 0.3 ± 0.0          | 42.2 ± 0.0    | 59.5                      |
+| ageing              | ppo_dr_raw                   | 415 ± 132  | 0.16 ± 0.09       |                    7 | 1.1 ± 0.8          | 41.9 ± 0.4    | –                         |
+| ageing              | ppo_dr_raw+shield            | 811 ± 30   | 0.04 ± 0.01       |                    5 | 0.1 ± 0.0          | 41.3 ± 0.1    | 36.2                      |
+| ageing              | ppo_dr_shieldtrain           | 229 ± 131  | 3.61 ± 1.19       |                   55 | 50.0 ± 27.3        | 45.1 ± 0.7    | –                         |
+| ageing              | ppo_dr_shieldtrain+shield    | 872 ± 19   | 0.09 ± 0.01       |                    5 | 0.3 ± 0.1          | 42.1 ± 0.1    | 52.9                      |
+| ageing              | ppo_dr_shieldtrain_p1        | 619 ± 86   | 0.86 ± 1.22       |                   22 | 5.6 ± 8.8          | 43.5 ± 1.0    | –                         |
+| ageing              | ppo_dr_shieldtrain_p1+shield | 893 ± 23   | 0.09 ± 0.01       |                    5 | 0.3 ± 0.0          | 42.1 ± 0.1    | 15.3                      |
+| long_bursts         | always_on                    | 1800 ± 0   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 39.5 ± 1.3    | –                         |
+| long_bursts         | pid                          | 71 ± 54    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 44.1 ± 0.3    | –                         |
+| long_bursts         | oracle_pid                   | 70 ± 52    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 44.2 ± 0.3    | –                         |
+| long_bursts         | pid40_shield                 | 342 ± 178  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.0 ± 0.4    | 27.5                      |
+| long_bursts         | shield_only_nobackup         | 131 ± 108  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 43.5 ± 0.1    | 37.2                      |
+| long_bursts         | shield_only                  | 369 ± 189  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.3    | 47.1                      |
+| long_bursts         | mpc                          | 380 ± 188  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.3    | –                         |
+| long_bursts         | mpc_preview                  | 315 ± 171  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.9 ± 0.3    | –                         |
+| long_bursts         | ppo                          | 32 ± 7     | 3.21 ± 1.49       |                   37 | 37.3 ± 31.7        | 44.8 ± 0.3    | –                         |
+| long_bursts         | ppo+shield                   | 338 ± 24   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.1 ± 0.0    | 35.3                      |
+| long_bursts         | ppo_dr                       | 80 ± 48    | 1.09 ± 1.86       |                   13 | 12.7 ± 22.1        | 43.5 ± 1.2    | –                         |
+| long_bursts         | ppo_dr+shield                | 308 ± 8    | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.0 ± 0.1    | 23.3                      |
+| long_bursts         | ppo_dr_nosigma               | 73 ± 25    | 0.23 ± 0.39       |                    5 | 1.0 ± 1.7          | 43.4 ± 0.6    | –                         |
+| long_bursts         | ppo_dr_nosigma+shield        | 321 ± 20   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.1 ± 0.1    | 25.7                      |
+| long_bursts         | ppo_dr_raw                   | 449 ± 117  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.4 ± 0.3    | –                         |
+| long_bursts         | ppo_dr_raw+shield            | 530 ± 115  | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 40.4 ± 0.3    | 5.0                       |
+| long_bursts         | ppo_dr_shieldtrain           | 12 ± 9     | 26.51 ± 16.84     |                   93 | 1075.8 ± 1093.2    | 48.0 ± 2.0    | –                         |
+| long_bursts         | ppo_dr_shieldtrain+shield    | 360 ± 16   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.2 ± 0.0    | 45.5                      |
+| long_bursts         | ppo_dr_shieldtrain_p1        | 86 ± 59    | 15.41 ± 18.29     |                   65 | 336.5 ± 410.2      | 45.9 ± 1.3    | –                         |
+| long_bursts         | ppo_dr_shieldtrain_p1+shield | 355 ± 27   | 0.00 ± 0.00       |                    0 | 0.0 ± 0.0          | 42.1 ± 0.0    | 33.1                      |

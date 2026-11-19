@@ -1,6 +1,6 @@
 """Train every PPO variant x seed, several at once, and survive interruptions.
 
-    python run_all.py                                  # everything, default 500k steps, 3 seeds
+    python run_all.py                                  # everything, default 1M steps, 3 seeds
     python run_all.py --variants ppo_dr --seeds 0 1 2  # only the must-have runs
     python run_all.py --out /kaggle/working/thermal-safe-rl/runs --resume-from /kaggle/input/<prev>/thermal-safe-rl/runs
 
@@ -26,7 +26,8 @@ from pathlib import Path
 
 from train import DEFAULT_TIMESTEPS, VARIANTS, is_finished, run_dir
 
-ORDER = ["ppo_dr", "ppo", "ppo_dr_shieldtrain", "ppo_dr_nosigma", "ppo_dr_raw"]  # must-have first
+ORDER = ["ppo_dr", "ppo", "ppo_dr_shieldtrain", "ppo_dr_shieldtrain_p1", "ppo_dr_nosigma",
+         "ppo_dr_raw"]  # must-have first
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
 """Train one PPO policy.
 
-    python train.py --variant ppo_dr --seed 0                      # full run (500k steps)
+    python train.py --variant ppo_dr --seed 0                      # full run (1M steps)
     python train.py --variant ppo_dr --seed 0 --timesteps 20000    # smoke test
     python train.py --variant ppo_dr --seed 0 --resume             # continue from the latest checkpoint
 
@@ -25,13 +25,14 @@ VARIANTS = {
     # name: environment options
     "ppo_dr": dict(obs_mode="full", dr=True, shield=False),
     "ppo": dict(obs_mode="full", dr=False, shield=False),
-    "ppo_dr_shieldtrain": dict(obs_mode="full", dr=True, shield=True),
+    "ppo_dr_shieldtrain": dict(obs_mode="full", dr=True, shield=True),  # intervention penalty 0.1
+    "ppo_dr_shieldtrain_p1": dict(obs_mode="full", dr=True, shield=True, intervention_penalty=1.0),
     "ppo_dr_nosigma": dict(obs_mode="no_sigma", dr=True, shield=False),
     "ppo_dr_raw": dict(obs_mode="raw", dr=True, shield=False),
 }
 PPO_KWARGS = dict(gamma=0.995, n_steps=1024, batch_size=256, n_epochs=10, learning_rate=3e-4,
                   ent_coef=0.0, policy_kwargs=dict(net_arch=[64, 64]))
-DEFAULT_TIMESTEPS = 500_000
+DEFAULT_TIMESTEPS = 1_000_000
 CHECKPOINT_EVERY = 50_000
 
 

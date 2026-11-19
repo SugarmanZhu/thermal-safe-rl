@@ -209,18 +209,22 @@ CTRL_STYLE = {
     "always_on": dict(color=INK2, marker="s", mfc="none", label="always on (floor)"),
     "oracle_pid": dict(color=INK2, marker="D", mfc="none", label="oracle PID (sees true core)"),
     "pid": dict(color=ORANGE, marker="o", label="PID"),
+    "pid40_shield": dict(color=ORANGE, marker="p", label="PID aiming at 40 °C + shield"),
     "shield_only_nobackup": dict(color=AQUA, marker="^", mfc="none", label="shield only, v1 (no backup check)"),
     "shield_only": dict(color=AQUA, marker="^", label="shield only (backup check)"),
     "mpc": dict(color=AQUA, marker="v", label="MPC (backup check)"),
+    "mpc_preview": dict(color=AQUA, marker=">", label="MPC + perfect 60 s load preview"),
     "ppo_dr": dict(color=BLUE, marker="o", mfc="none", label="PPO (DR), no shield"),
     "ppo_dr+shield": dict(color=BLUE, marker="*", label="PPO (DR) + shield"),
-    "ppo_dr_shieldtrain+shield": dict(color=BLUE, marker="P", label="PPO trained with shield + shield"),
+    "ppo_dr_shieldtrain+shield": dict(color=BLUE, marker="P", label="PPO trained with shield (penalty 0.1) + shield"),
+    "ppo_dr_shieldtrain_p1": dict(color=BLUE, marker="d", mfc="none", label="PPO trained with shield (penalty 1.0), no shield"),
+    "ppo_dr_shieldtrain_p1+shield": dict(color=BLUE, marker="d", label="PPO trained with shield (penalty 1.0) + shield"),
     "ppo": dict(color=BLUE, marker="X", mfc="none", label="PPO (no DR), no shield"),
     "ppo+shield": dict(color=BLUE, marker="X", label="PPO (no DR) + shield"),
 }
-PARETO_SET = ["always_on", "oracle_pid", "pid", "shield_only_nobackup", "shield_only", "mpc",
-              "ppo_dr", "ppo_dr+shield", "ppo_dr_shieldtrain+shield"]
-TRACE_SET = ["always_on", "pid", "shield_only", "mpc", "ppo_dr", "ppo_dr+shield"]
+PARETO_SET = ["always_on", "oracle_pid", "pid", "pid40_shield", "shield_only", "mpc", "mpc_preview",
+              "ppo_dr", "ppo_dr+shield", "ppo_dr_shieldtrain_p1", "ppo_dr_shieldtrain_p1+shield"]
+TRACE_SET = ["always_on", "pid", "pid40_shield", "shield_only", "mpc_preview", "ppo_dr", "ppo_dr+shield"]
 TRACE_SCENARIOS = ("nominal", "resistance_mismatch")
 TRACE_SEED = 0
 RUNS = Path(__file__).resolve().parent / "runs"
@@ -473,7 +477,7 @@ def plot_pareto(df: pd.DataFrame, names) -> None:
         ax.set_title(scen.replace("_", " "), loc="left")
         _log_energy_axis(ax)
         ax.set_yscale("symlog", linthresh=1.0)
-        ax.set_ylim(-0.3, 300)
+        ax.set_ylim(-0.3, 3000)
     axes.flat[-1].axis("off")
     handles = [plt.Line2D([], [], ls="none", marker=style(n)["marker"], ms=13 if style(n)["marker"] == "*" else 8,
                           color=style(n)["color"],
@@ -569,9 +573,8 @@ def training_study(runs_dir: Path) -> pd.DataFrame | None:
 
 
 def plot_training(df: pd.DataFrame) -> None:
-    order = [v for v in ("ppo_dr", "ppo", "ppo_dr_shieldtrain", "ppo_dr_nosigma", "ppo_dr_raw")
-             if v in set(df.variant)] + sorted(set(df.variant) - {"ppo_dr", "ppo", "ppo_dr_shieldtrain",
-                                                                   "ppo_dr_nosigma", "ppo_dr_raw"})
+    known = ("ppo_dr", "ppo", "ppo_dr_shieldtrain", "ppo_dr_shieldtrain_p1", "ppo_dr_nosigma", "ppo_dr_raw")
+    order = [v for v in known if v in set(df.variant)] + sorted(set(df.variant) - set(known))
     colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
     fig, axes = plt.subplots(1, 2, figsize=(11, 4))
     for v, col in zip(order, colors):
