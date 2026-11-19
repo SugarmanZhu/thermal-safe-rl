@@ -1,13 +1,17 @@
 """Evaluation.
 
     python evaluate.py estimation     # RQ1: KF vs AKF in every scenario (no RL needed)
+    python evaluate.py tune-pid       # grid search for the PID gains on tuning seeds
+    python evaluate.py controllers    # controllers x scenarios x seeds (RQ2-RQ4)
 
-The controller comparison (RQ2-RQ4) will be added as another subcommand.
+Evaluation seeds are 0-19; PID tuning uses seeds 1000-1019.
 """
 
 from __future__ import annotations
 
 import argparse
+import os
+import sys
 from pathlib import Path
 
 import matplotlib
@@ -191,16 +195,331 @@ def plot_calibration(df: pd.DataFrame) -> None:
     plt.close(fig)
 
 
+# ---------------------------------------------------------------------------
+# Controller comparison (RQ2-RQ4)
+# ---------------------------------------------------------------------------
+
+# Reference lines in ink; real controllers take the first three palette slots, which are
+# distinguishable for every pair (scatter plots compare all pairs, not just neighbours).
+CTRL_STYLE = {
+    "always_on": dict(color=INK2, marker="s", mfc="none", label="always on (floor)"),
+    "oracle_pid": dict(color=INK2, marker="D", mfc="none", label="oracle PID (sees true core)"),
+    "pid": dict(color="#eb6834", marker="o", label="PID"),
+    "shield_only_nobackup": dict(color="#1baf7a", marker="^", mfc="none",
+                                 label="shield only, v1 (no backup check)"),
+    "shield_only": dict(color="#1baf7a", marker="^", label="shield only (backup check)"),
+    "mpc": dict(color="#2a78d6", marker="v", label="MPC (backup check)"),
+}
+TRACE_SCENARIOS = ("nominal", "resistance_mismatch")
+TRACE_SEED = 0
+
+
+def _log_energy_axis(ax) -> None:
+    from matplotlib.ticker import FixedLocator, NullFormatter, ScalarFormatter
+
+    ax.set_xscale("log")
+    ax.xaxis.set_major_locator(FixedLocator([10, 30, 100, 300, 1000, 3000]))
+    ax.xaxis.set_major_formatter(ScalarFormatter())
+    ax.xaxis.set_minor_formatter(NullFormatter())
+
+
+def control_metrics(h: dict) -> dict:
+    Tc, u = h["Tc"][1:], h["u"][:-1]
+    viol = np.maximum(0.0, Tc - T_LIMIT)
+    return {
+        "energy": float(np.sum(u**3) * DT),  # pump-seconds at full power
+        "viol_steps_pct": float(np.mean(viol > 0) * 100),
+        "any_violation": float(np.any(viol > 0)),
+        "deg_s": float(np.sum(viol) * DT),  # degree-seconds above 45 degC
+        "max_Tc": float(np.nanmax(h["Tc"])),
+        "mean_u": float(np.mean(u)),
+    }
+
+
+def run_controller_episode(job: tuple) -> tuple[dict, dict | None]:
+    """job = (controller, scenario, seed, estimator, pid_gains or None). Top-level for multiprocessing."""
+    from controllers import PID, make_controller
+
+    ctrl_name, scen, seed, estimator, gains = job
+    ctrl = PID(**gains) if gains is not None else make_controller(ctrl_name)
+    sim = ThermalSim(SCENARIOS[scen], KalmanFilter(augment=(estimator == "akf")))
+    sim.reset(seed)
+    ctrl.reset()
+    while not sim.done:
+        sim.step(ctrl.act(sim))
+    h = sim.hist
+    est = estimation_metrics(h)
+    row = {"controller": ctrl_name, "scenario": scen, "seed": seed, "estimator": estimator,
+           **control_metrics(h), **ctrl.stats(),
+           "est_rmse": est["rmse"], "est_coverage": est["coverage_2sigma"], "est_nis": est["nis"]}
+    keep = seed == TRACE_SEED and scen in TRACE_SCENARIOS and gains is None
+    return row, (h if keep else None)
+
+
+def _pool_map(fn, jobs, n_jobs):
+    if n_jobs <= 1:
+        return [fn(j) for j in jobs]
+    import multiprocessing as mp
+
+    with mp.get_context("spawn" if sys.platform == "darwin" else "fork").Pool(n_jobs) as pool:
+        return pool.map(fn, jobs, chunksize=max(1, len(jobs) // (8 * n_jobs)))
+
+
+def tune_pid(n_jobs: int, seeds=range(1000, 1020)) -> None:
+    """Grid search on separate tuning seeds, nominal scenario, AKF estimate.
+    Objective = energy + 10 * degree-seconds above 45 degC (the RL reward's weights)."""
+    grid = [dict(kp=kp, ki=ki, kd=kd) for kp in (0.1, 0.2, 0.3, 0.5, 1.0)
+            for ki in (0.0, 0.001, 0.003, 0.01) for kd in (0.0, 10.0, 30.0)]
+    jobs = [("pid", "nominal", s, "akf", g) for g in grid for s in seeds]
+    rows = [r for r, _ in _pool_map(run_controller_episode, jobs, n_jobs)]
+    df = pd.DataFrame(rows)
+    df[["kp", "ki", "kd"]] = [[g["kp"], g["ki"], g["kd"]] for g in grid for _ in seeds]
+    res = df.groupby(["kp", "ki", "kd"])[["energy", "deg_s", "max_Tc"]].mean()
+    res["objective"] = res["energy"] + 10 * res["deg_s"]
+    print(res.sort_values("objective").head(10).to_string())
+
+
+def controller_study(names: list[str], n_seeds: int, estimator: str, n_jobs: int) -> pd.DataFrame:
+    jobs = [(c, s, seed, estimator, None) for c in names for s in SCENARIOS for seed in range(n_seeds)]
+    out = _pool_map(run_controller_episode, jobs, n_jobs)
+    df = pd.DataFrame([r for r, _ in out])
+    traces = {(r["controller"], r["scenario"]): h for r, h in out if h is not None}
+    suffix = "" if estimator == "akf" else f"_{estimator}"
+    RESULTS.mkdir(exist_ok=True)
+    df.to_csv(RESULTS / f"controllers{suffix}.csv", index=False)
+    write_controller_tables(df, names, suffix, estimator, n_seeds)
+    if estimator == "akf":
+        for scen in TRACE_SCENARIOS:
+            plot_trajectories(traces, names, scen)
+        plot_pareto(df, names)
+    return df
+
+
+def _fmt(m: float, s: float, digits: int = 1) -> str:
+    return f"{m:.{digits}f} ± {s:.{digits}f}"
+
+
+def write_controller_tables(df: pd.DataFrame, names, suffix: str, estimator: str, n_seeds: int) -> None:
+    order = {n: i for i, n in enumerate(names)}
+    g = df.groupby(["scenario", "controller"], sort=False)
+    mean, std = g.mean(numeric_only=True), g.std(numeric_only=True)
+    lines = [f"Controller comparison: {n_seeds} seeds per cell, estimator {estimator.upper()}, "
+             "mean ± std over seeds. Generated by `python evaluate.py controllers`.\n",
+             "Energy is pump-seconds at full power (always on = 1800). Degree-seconds = "
+             "∫ max(0, Tc − 45 °C) dt.\n"]
+    for metric, title, digits in [("energy", "Cooling energy (pump-seconds)", 0),
+                                  ("deg_s", "Degree-seconds above 45 °C", 1),
+                                  ("any_violation", "Episodes with any violation (%)", 0)]:
+        piv = mean[metric].unstack("scenario")[list(SCENARIOS)]
+        if metric == "any_violation":
+            piv = piv * 100
+        piv = piv.loc[sorted(piv.index, key=order.get)]
+        lines += [f"\n### {title}\n", piv.round(digits).to_markdown() + "\n"]
+    full = []
+    for (scen, ctrl), m in mean.iterrows():
+        s = std.loc[(scen, ctrl)]
+        full.append({"scenario": scen, "controller": ctrl,
+                     "energy": _fmt(m.energy, s.energy, 0),
+                     "% steps > 45 °C": _fmt(m.viol_steps_pct, s.viol_steps_pct, 2),
+                     "P(any violation) %": f"{m.any_violation * 100:.0f}",
+                     "degree-s > 45 °C": _fmt(m.deg_s, s.deg_s, 1),
+                     "max Tc (°C)": _fmt(m.max_Tc, s.max_Tc, 1),
+                     "shield active (% steps)": f"{m.shield_rate:.1f}" if "shield_rate" in m and
+                     not np.isnan(m.shield_rate) else "–"})
+    full = pd.DataFrame(full)
+    full["_o"] = full["controller"].map(order)
+    full = full.sort_values(["scenario", "_o"], key=lambda c: c.map(
+        {n: i for i, n in enumerate(SCENARIOS)}) if c.name == "scenario" else c).drop(columns="_o")
+    lines += ["\n### Full table\n", full.to_markdown(index=False) + "\n"]
+    (RESULTS / f"controllers{suffix}.md").write_text("\n".join(lines))
+
+
+def plot_trajectories(traces: dict, names, scen: str) -> None:
+    names = [n for n in names if (n, scen) in traces]
+    any_h = traces[(names[0], scen)]
+    t = np.arange(len(any_h["Tc"])) * DT / 60
+    fig = plt.figure(figsize=(11, 1.25 + 1.55 * len(names)))
+    gs = fig.add_gridspec(len(names) + 1, 2, height_ratios=[0.8] + [1] * len(names), hspace=0.55)
+    ax = fig.add_subplot(gs[0, :])
+    ax.step(t[:-1], any_h["I"][:-1], where="post", color=INK2, lw=1.2)
+    ax.set_ylabel("current (A)")
+    ax.set_title("Drive cycle (same for every controller)", loc="left")
+    for row, n in enumerate(names, start=1):
+        h = traces[(n, scen)]
+        m = control_metrics(h)
+        a1 = fig.add_subplot(gs[row, 0], sharex=ax)
+        a1.plot(t, h["Tc"], color=INK, lw=1.3)
+        a1.axhline(T_LIMIT, color=MUTED, lw=1, ls="--")
+        a1.set_ylim(24, 48)
+        a1.set_ylabel("core (°C)")
+        a1.set_title(f"{CTRL_STYLE[n]['label']}: max {m['max_Tc']:.1f} °C, "
+                     f"{m['deg_s']:.1f} degree-s above 45 °C", loc="left", fontsize=9)
+        a2 = fig.add_subplot(gs[row, 1], sharex=ax)
+        a2.fill_between(t[:-1], 0, h["u"][:-1], step="post", color="#2a78d6", alpha=0.25, lw=0)
+        a2.step(t[:-1], h["u"][:-1], where="post", color="#2a78d6", lw=1.2)
+        a2.set_ylim(0, 1.05)
+        a2.set_ylabel("cooling u")
+        a2.set_title(f"energy {m['energy']:.0f} pump-s", loc="left", fontsize=9)
+        if row == len(names):
+            a1.set_xlabel("time (min)")
+            a2.set_xlabel("time (min)")
+    first = fig.axes[1]
+    first.text(t[-1], T_LIMIT, "45 °C", color=INK2, ha="right", va="bottom", fontsize=8)
+    pretty = scen.replace("_", " ")
+    fig.suptitle(f"One episode per controller, {pretty} scenario (seed {TRACE_SEED}): "
+                 "true core temperature (left) and cooling command (right)",
+                 x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.subplots_adjust(left=0.07, right=0.98, top=0.93, bottom=0.05)
+    fig.savefig(RESULTS / f"trajectory_{scen}.png", dpi=150)
+    plt.close(fig)
+
+
+def plot_pareto(df: pd.DataFrame, names) -> None:
+    mean = df.groupby(["scenario", "controller"]).mean(numeric_only=True)
+    scens = list(SCENARIOS)
+    fig, axes = plt.subplots(2, 4, figsize=(12, 6.2), sharex=True, sharey=True)
+    for ax, scen in zip(axes.flat, scens):
+        for n in names:
+            st = CTRL_STYLE[n]
+            m = mean.loc[(scen, n)]
+            ax.plot(m.energy, m.deg_s, ls="none", marker=st["marker"], ms=8, color=st["color"],
+                    mfc=st.get("mfc", st["color"]), mec=st["color"] if st.get("mfc") else SURFACE,
+                    mew=1.5 if st.get("mfc") else 1.0, zorder=3)
+        ax.set_title(scen.replace("_", " "), loc="left")
+        _log_energy_axis(ax)
+        ax.set_yscale("symlog", linthresh=1.0)
+        ax.set_ylim(-0.3, 300)
+    axes.flat[-1].axis("off")
+    handles = [plt.Line2D([], [], ls="none", marker=CTRL_STYLE[n]["marker"], ms=8,
+                          color=CTRL_STYLE[n]["color"], mfc=CTRL_STYLE[n].get("mfc", CTRL_STYLE[n]["color"]),
+                          label=CTRL_STYLE[n]["label"]) for n in names]
+    axes.flat[-1].legend(handles=handles, loc="center left", fontsize=9)
+    for ax in axes[:, 0]:
+        ax.set_ylabel("degree-s above 45 °C\n(symlog; lower is safer)")
+    for ax in axes[-1, :3]:
+        ax.set_xlabel("cooling energy, pump-s (log)")
+    axes[0, 3].set_xlabel("cooling energy, pump-s (log)")
+    axes[0, 3].xaxis.set_tick_params(labelbottom=True)
+    fig.suptitle(f"Energy vs safety, mean of {df.seed.nunique()} seeds per point "
+                 "(bottom-left is best; table: results/controllers.md)",
+                 x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(RESULTS / "pareto.png", dpi=150)
+    plt.close(fig)
+
+
+SWEEP_SCENARIOS = ("nominal", "heat_mismatch", "ageing", "resistance_mismatch")
+SWEEP_BURSTS_S = (0, 30, 60, 90, 120, 180)
+
+
+def run_sweep_episode(job: tuple) -> dict:
+    """job = (burst_s, scenario, seed); burst_s = 0 means no backup check."""
+    from controllers import Shield, ShieldOnly
+
+    burst_s, scen, seed = job
+    ctrl = ShieldOnly(Shield(backup=burst_s > 0, burst_steps=max(1, int(round(burst_s / DT)))))
+    sim = ThermalSim(SCENARIOS[scen], KalmanFilter(augment=True))
+    sim.reset(seed)
+    ctrl.reset()
+    while not sim.done:
+        sim.step(ctrl.act(sim))
+    return {"burst_s": burst_s, "scenario": scen, "seed": seed, **control_metrics(sim.hist)}
+
+
+def shield_sweep(n_seeds: int, n_jobs: int) -> pd.DataFrame:
+    """Shield-only with different worst-case burst assumptions: the price of robustness."""
+    jobs = [(b, s, seed) for b in SWEEP_BURSTS_S for s in SWEEP_SCENARIOS for seed in range(n_seeds)]
+    df = pd.DataFrame(_pool_map(run_sweep_episode, jobs, n_jobs))
+    ref_jobs = [(c, s, seed, "akf", None) for c in ("always_on", "pid")
+                for s in SWEEP_SCENARIOS for seed in range(n_seeds)]
+    ref = pd.DataFrame([r for r, _ in _pool_map(run_controller_episode, ref_jobs, n_jobs)])
+    RESULTS.mkdir(exist_ok=True)
+    df.to_csv(RESULTS / "shield_tradeoff.csv", index=False)
+    cols = list(SWEEP_SCENARIOS)
+    parts = [f"Shield-only with a worst-case burst of the given length (25 A, full cooling) in the "
+             f"backup check; 0 s = no backup check (the v1 shield). {n_seeds} evaluation seeds per "
+             "cell, AKF, means. Rows: assumed burst length (s). Generated by "
+             "`python evaluate.py shield-sweep`.\n"]
+    for metric, title, scale, digits in [("energy", "Cooling energy (pump-seconds)", 1, 0),
+                                         ("deg_s", "Degree-seconds above 45 °C", 1, 1),
+                                         ("any_violation", "Episodes with any violation (%)", 100, 0)]:
+        t1 = (df.groupby(["burst_s", "scenario"])[metric].mean().unstack()[cols] * scale).round(digits)
+        t2 = (ref.groupby(["controller", "scenario"])[metric].mean().unstack()[cols] * scale).round(digits)
+        t1.index = [f"shield, {b:.0f} s" for b in t1.index]
+        t2.index = [CTRL_STYLE[c]["label"] for c in t2.index]
+        parts += [f"\n### {title}\n", pd.concat([t1, t2]).to_markdown() + "\n"]
+    text = "\n".join(parts)
+    (RESULTS / "shield_tradeoff.md").write_text(text)
+    plot_shield_tradeoff(df, ref)
+    return df
+
+
+def plot_shield_tradeoff(df: pd.DataFrame, ref: pd.DataFrame) -> None:
+    m = df.groupby(["scenario", "burst_s"])[["energy", "deg_s"]].mean()
+    r = ref.groupby(["scenario", "controller"])[["energy", "deg_s"]].mean()
+    fig, axes = plt.subplots(1, len(SWEEP_SCENARIOS), figsize=(12, 3.9), sharey=True)
+    for ax, scen in zip(axes, SWEEP_SCENARIOS):
+        d = m.loc[scen]
+        ax.plot(d.energy, d.deg_s, color=CTRL_STYLE["shield_only"]["color"], lw=1.5, marker="o",
+                ms=6, mec=SURFACE, zorder=3)
+        for b, row in d.iterrows():
+            if b in (0, 90, 180):  # label a few points; the legend explains the rest
+                ax.annotate(f"{b:.0f} s", (row.energy, row.deg_s), textcoords="offset points",
+                            xytext=(0, 7), ha="center", fontsize=8, color=INK2)
+        for c in ("always_on", "pid"):
+            st = CTRL_STYLE[c]
+            ax.plot(r.loc[(scen, c)].energy, r.loc[(scen, c)].deg_s, ls="none", marker=st["marker"],
+                    ms=8, color=st["color"], mfc=st.get("mfc", st["color"]), mec=st["color"]
+                    if st.get("mfc") else SURFACE, mew=1.5 if st.get("mfc") else 1.0, zorder=3)
+        _log_energy_axis(ax)
+        ax.set_title(scen.replace("_", " "), loc="left")
+        ax.set_xlabel("cooling energy, pump-s (log)")
+    axes[0].set_ylabel("degree-s above 45 °C (lower is safer)")
+    handles = [plt.Line2D([], [], color=CTRL_STYLE["shield_only"]["color"], marker="o", mec=SURFACE,
+                          label="shield only; points = assumed burst 0, 30, 60, 90, 120, 180 s")] + [
+        plt.Line2D([], [], ls="none", marker=CTRL_STYLE[c]["marker"], ms=8, color=CTRL_STYLE[c]["color"],
+                   mfc=CTRL_STYLE[c].get("mfc", CTRL_STYLE[c]["color"]), label=CTRL_STYLE[c]["label"])
+        for c in ("always_on", "pid")]
+    fig.legend(handles=handles, loc="lower center", ncol=3, fontsize=8.5, bbox_to_anchor=(0.5, -0.01))
+    fig.suptitle("The price of robustness: assuming longer worst-case bursts buys safety with energy "
+                 f"(mean of {df.seed.nunique()} seeds)", x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.tight_layout(rect=(0, 0.07, 1, 1))
+    fig.savefig(RESULTS / "shield_tradeoff.png", dpi=150)
+    plt.close(fig)
+
+
 def main() -> None:
+    from controllers import BASELINES
+
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     est = sub.add_parser("estimation", help="KF vs AKF in every scenario")
     est.add_argument("--seeds", type=int, default=20)
+    ctl = sub.add_parser("controllers", help="controllers x scenarios x seeds")
+    ctl.add_argument("--controllers", nargs="+", default=BASELINES)
+    ctl.add_argument("--seeds", type=int, default=20)
+    ctl.add_argument("--estimator", choices=["akf", "kf"], default="akf")
+    ctl.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    tun = sub.add_parser("tune-pid", help="grid search for the PID gains (tuning seeds only)")
+    tun.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    swp = sub.add_parser("shield-sweep", help="shield energy/safety vs assumed worst-case burst length")
+    swp.add_argument("--seeds", type=int, default=20)
+    swp.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     args = ap.parse_args()
     if args.cmd == "estimation":
         df = estimation_study(args.seeds)
         print((RESULTS / "estimation.md").read_text())
         print(f"wrote {RESULTS}/estimation.csv, estimation.md, estimation.png, calibration.png ({len(df)} episodes)")
+    elif args.cmd == "controllers":
+        df = controller_study(args.controllers, args.seeds, args.estimator, args.jobs)
+        suffix = "" if args.estimator == "akf" else f"_{args.estimator}"
+        print((RESULTS / f"controllers{suffix}.md").read_text())
+        print(f"{len(df)} episodes")
+    elif args.cmd == "tune-pid":
+        tune_pid(args.jobs)
+    elif args.cmd == "shield-sweep":
+        shield_sweep(args.seeds, args.jobs)
+        print((RESULTS / "shield_tradeoff.md").read_text())
 
 
 if __name__ == "__main__":

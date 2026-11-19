@@ -8,7 +8,7 @@ A small demo of physics-informed state estimation and safe adaptive control for 
 - **RQ3:** whether combining estimation and control helps
 - **RQ4:** robustness to model error, sensor loss and conditions beyond training
 
-> **Status:** the physics model, both Kalman filters, the unit tests and the estimation study (RQ1) are done. The controllers (PID, shield, MPC) and RL training come next.
+> **Status:** the physics model, both Kalman filters, the estimation study (RQ1), and the non-RL controllers (PID, safety shield, MPC) with their full evaluation are done. RL training comes next.
 
 ## Model
 
@@ -44,12 +44,50 @@ Each scenario was run for 20 seeds with full cooling, so that only the estimator
 | Outage (sensor offline 30–120 s, ~20 % of the time) | Both filters stay accurate with full cooling. Outages matter more once the controller relies on the estimate. |
 | Nominal | Accurate (0.12–0.14 °C RMSE), but **conservative**: NEES is 0.4 where a calibrated filter gives 2, so σ is wider than the real error. The process noise (0.05 °C per step) is a tuning choice; a smaller value would tighten σ but make the mismatch cases even more overconfident. |
 
+## Controllers without RL (RQ2, RQ4 baselines)
+
+All controllers act on the AKF estimate, except the oracle PID, which sees the true core temperature (impossible in practice; a reference only).
+
+| Controller | Rule |
+|---|---|
+| Always on | u = 1 all the time. The physical floor for violations. |
+| PID | On the core estimate, setpoint 42 °C. The gains come from a grid search on separate tuning seeds (1000–1019) using the RL reward's weights; the search chose a proportional controller (kp = 0.3, ki = kd = 0). |
+| Oracle PID | The same PID, but fed the true core temperature. |
+| Shield only, v1 | The cheapest u that keeps the predicted core mean + 2σ ≤ 44 °C over the next 30 s, assuming the current stays constant. This is the original plan's shield. |
+| **Shield only** | v1 plus a **backup check**: hold u for 30 s, then survive a worst-case burst (25 A for 180 s, the drive-cycle maximum) with full cooling, still with mean + 2σ ≤ 44 °C. It uses the AKF's heat-scale estimate θ, so a cell that runs hot automatically gets a larger reserve. |
+| MPC | Plans 60 s ahead (216 candidate plans, 3 blocks of 20 s), minimising Σu³·dt subject to the same safety rule as the shield. |
+
+![Energy vs safety](results/pareto.png)
+
+20 evaluation seeds per cell (full tables: [results/controllers.md](results/controllers.md)):
+
+| Scenario | Finding |
+|---|---|
+| Nominal, noisy, outage | **Everyone is safe.** PID is cheapest (31 pump-s); the backup shield and MPC use about 8× more (237–245) as insurance against bursts that never cause trouble here. |
+| Heat mismatch (R_int ×1.3) | PID **and the oracle PID** exceed 45 °C in 85 % of episodes: knowing the true core temperature doesn't help a controller that only reacts. The v1 shield fails in 40 %. **The backup shield: 0 %**, using 18 % less energy than always-on (1471 vs 1800). |
+| Ageing (R_int → ×1.4) | The backup shield's only violating episode (seed 17) is the one where even always-on exceeds 45 °C, though the shield exceeds by more (6.8 vs 0.03 degree-seconds). PID: 75 % of episodes. |
+| Resistance mismatch (Rc ×1.2) | **Every controller that uses the estimate fails** (60–80 % of episodes), but the oracle PID does not (5 %). The estimate itself is wrong (RQ1), and no downstream safety logic can fix that. |
+| Long bursts (360 s, beyond the shield's 180 s assumption) | No violations by any controller on the nominal plant. |
+
+**How the shield design changed during evaluation.** These changes were made on the tuning seeds and then confirmed on the evaluation seeds:
+1. The v1 shield failed under heat mismatch even with an accurate estimate (error about 0.1 °C, θ̂ = 1.30). A burst arrived while the core was already warm, and from there even full cooling could not keep it below 45 °C. A 30 s look-ahead with constant current cannot see this coming. Hence the backup check.
+2. With a one-step hold, the backup check made the command chatter between low and full cooling. Holding the candidate for 30 s gave the same safety with 25 % less energy and far fewer on/off switches.
+
+**The price of robustness.** The assumed worst-case burst length is a dial between energy and safety. There is no free lunch:
+
+![Shield trade-off](results/shield_tradeoff.png)
+
+This is where learning could help: a policy that anticipates load, or a load forecast, could keep the same safety at lower cost than "assume the worst at every moment". It also explains why PID beats the shield on energy in the nominal case. Under a u³ cost, gentle early cooling is cheaper than late hard cooling, and the shield and MPC cool late and hard. One episode per controller: [nominal](results/trajectory_nominal.png), [resistance mismatch](results/trajectory_resistance_mismatch.png).
+
 ## Reproduce
 
 ```bash
 pip install -r requirements.txt
-python -m pytest -q                 # 17 checks: physics, discretisation, scenarios, filters
-python evaluate.py estimation       # writes results/estimation.{csv,md,png}, results/calibration.png
+python -m pytest -q                 # 19 checks: physics, discretisation, scenarios, filters, shield
+python evaluate.py estimation       # RQ1: results/estimation.*, results/calibration.png (~30 s)
+python evaluate.py tune-pid         # PID gain search on tuning seeds (~30 s on 4 cores)
+python evaluate.py controllers      # results/controllers.*, pareto.png, trajectory_*.png (~3 min on 4 cores)
+python evaluate.py shield-sweep     # results/shield_tradeoff.* (~1 min on 4 cores)
 ```
 
 ## Code
@@ -58,7 +96,12 @@ python evaluate.py estimation       # writes results/estimation.{csv,md,png}, re
 |---|---|
 | `thermal_env.py` | Cell parameters, exact discretisation, drive cycles, scenarios, `ThermalSim` (plant + estimator for one episode) |
 | `estimators.py` | `KalmanFilter(augment=False/True)`: KF and AKF, plus batch open-loop forecasts for the shield and MPC |
-| `evaluate.py` | Estimation study (more evaluations to come) |
-| `tests/test_physics.py` | Unit tests: physics, discretisation, scenarios and filters |
+| `controllers.py` | Always-on, PID / oracle PID, `Shield` with `BackupCheck`, shield-only, MPC |
+| `evaluate.py` | Estimation study, PID tuning, controller comparison, shield trade-off sweep |
+| `tests/test_physics.py` | Unit tests: physics, filters and the shield |
+
+Seeds: evaluation uses seeds 0–19; tuning (PID gains, shield design choices) used seeds 1000–1019.
 
 Parameter values for Cc, Cs and Rc follow a 26650 cylindrical cell from the lumped thermal-model literature (exact reference to be added). The cooling map h(u) is an assumption of this demo.
+
+**Known limitations so far:** a lumped two-state model; an assumed cooling map; the shield and MPC assume the current stays constant (apart from the worst-case burst in the backup check); the shield still switches more often than a real pump would like; and the filter's σ is conservative in the nominal case (NEES 0.4).

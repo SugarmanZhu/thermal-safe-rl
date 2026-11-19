@@ -162,3 +162,45 @@ def test_outage_skips_updates_and_sigma_grows():
     for _ in range(60):
         sim.step(1.0)
     assert sim.est.sigma_Tc > s0 * 1.3
+
+
+# -- controllers -------------------------------------------------------------------
+
+def test_backup_check_matches_brute_force():
+    from controllers import BackupCheck
+
+    sim = ThermalSim(SCENARIOS["heat_mismatch"], KalmanFilter(augment=True))
+    sim.reset(0)
+    for _ in range(400):
+        sim.step(0.3)
+    cands = np.array([0.0, 0.5, 1.0])
+    for hold in (1, 5):
+        chk = BackupCheck(burst_steps=30, hold=hold)
+        for limit in (40.0, 44.0, 50.0):
+            chk.limit = limit
+            got = chk.ok(sim, cands)
+            for i, u in enumerate(cands):
+                ref = KalmanFilter(augment=True)
+                ref.x, ref.P = sim.est.x.copy(), sim.est.P.copy()
+                worst = -np.inf
+                for _ in range(hold):
+                    ref.predict(sim.I_now, u)
+                    worst = max(worst, ref.Tc_hat + 2 * ref.sigma_Tc)
+                for _ in range(30):
+                    ref.predict(25.0, 1.0)
+                    worst = max(worst, ref.Tc_hat + 2 * ref.sigma_Tc)
+                assert got[i] == (worst <= limit)
+
+
+def test_shield_returns_rl_action_when_safe_and_full_cooling_when_not():
+    from controllers import Shield
+
+    sim = ThermalSim(SCENARIOS["nominal"], KalmanFilter(augment=True))
+    sim.reset(0)
+    sim.ep.I[:] = 5.0
+    for _ in range(100):
+        sim.step(0.0)
+    sh = Shield()
+    assert sh.safe_action(sim, 0.0) == 0.0  # cool cell, low current: no intervention
+    sim.est.x[0] = 46.0  # pretend the core is already too hot
+    assert sh.safe_action(sim, 0.0) == 1.0
