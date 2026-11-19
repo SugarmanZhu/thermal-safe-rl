@@ -2,7 +2,11 @@
 
 A small, fully reproducible demo of physics-informed state estimation and safe adaptive control for thermal management, using a battery cell as the example.
 
-**Problem.** Keep a battery cell's **core temperature ≤ 45 °C** with as little cooling energy as possible. Only the **surface** temperature is measured, with noise and occasional sensor outages, and the model may be wrong.
+**Problem.** Keep a battery cell's **core temperature ≤ 45 °C** with as little cooling energy as possible. Only the **surface** temperature is measured, with noise and occasional sensor outages, and the model may be wrong. The demo touches four research questions:
+- **RQ1:** estimating the unmeasured core temperature with calibrated uncertainty
+- **RQ2:** safe RL with an uncertainty-aware safety shield
+- **RQ3:** whether combining estimation and control helps
+- **RQ4:** robustness to model error, sensor loss and conditions beyond training
 
 Everything runs on a laptop CPU: the full pipeline (6 PPO variants × 3 seeds × 1M steps, plus all evaluations) takes about an hour on 4 cores.
 
