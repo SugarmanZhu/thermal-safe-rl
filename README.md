@@ -1,5 +1,7 @@
 # Safe RL for Battery Thermal Management under Partial Observability
 
+**English** | [简体中文](README.zh-CN.md)
+
 A small, fully reproducible demo of physics-informed state estimation and safe adaptive control for thermal management, using a battery cell as the example.
 
 **Problem.** Keep a battery cell's **core temperature ≤ 45 °C** with as little cooling energy as possible. Only the **surface** temperature is measured, with noise and occasional sensor outages, and the model may be wrong. The demo touches four research questions:
