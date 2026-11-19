@@ -25,6 +25,7 @@ I_MAX = 25.0  # A
 
 @dataclass(frozen=True)
 class CellParams:
+    # Cc, Cs, Rc: Table 1 of Lin et al., J. Power Sources 257 (2014) 1-11 (A123 26650 LiFePO4 cell).
     Cc: float = 62.7  # J/K, core heat capacity
     Cs: float = 4.5  # J/K, surface heat capacity
     Rc: float = 1.94  # K/W, core-to-surface resistance

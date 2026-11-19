@@ -44,7 +44,7 @@ Cs · dTs/dt = (Tc − Ts)/Rc − (Ts − Tf)·(h0 + h1·u)
 ```
 
 - Tc is the core temperature (not measured), Ts the surface temperature (measured, σ = 0.3 °C), and u ∈ [0, 1] the coolant pump command. The pump uses power u³.
-- Cc = 62.7 J/K, Cs = 4.5 J/K and Rc = 1.94 K/W follow the 26650 LiFePO4 cell of Lin et al. [1, 2]. The cooling map h(u) = 0.15 + 0.85·u W/K is this demo's assumption.
+- Cc = 62.7 J/K, Cs = 4.5 J/K and Rc = 1.94 K/W are the values identified for a 2.3 Ah A123 26650 LiFePO4 cell in Table 1 of Lin et al. [2]. The cooling map h(u) = 0.15 + 0.85·u W/K is this demo's assumption; the convection resistance identified in [2] (Ru = 3.19 K/W, i.e. h ≈ 0.31 W/K) lies inside its range.
 - Steady state at 25 A is 43.4 °C with full cooling and 78.8 °C with none, so cooling is necessary. A cell that makes 30 % more heat would reach 48.9 °C even with full cooling, so under sustained full load some violations are physically unavoidable.
 - Each 2 s step is discretised exactly. The drive cycle is a random piecewise-constant current (0–25 A) with occasional bursts of 20–25 A lasting up to 180 s. Every controller is evaluated on the same 20 random drive cycles (seeds 0–19). Training uses fresh random cycles, and design choices were tuned on separate seeds (1000–1019).
 
@@ -184,7 +184,7 @@ No GPU is needed. On free cloud machines, use `notebooks/colab_debug.ipynb` for 
 ## References
 
 1. X. Lin, H. E. Perez, J. B. Siegel, A. G. Stefanopoulou, Y. Li, R. D. Anderson, Y. Ding, M. P. Castanier. Online parameterization of lumped thermal dynamics in cylindrical lithium ion batteries for core temperature estimation and health monitoring. *IEEE Transactions on Control Systems Technology*, 21(5):1745–1755, 2013.
-2. X. Lin, H. E. Perez, S. Mohan, J. B. Siegel, A. G. Stefanopoulou, Y. Ding, M. P. Castanier. A lumped-parameter electro-thermal model for cylindrical batteries. *Journal of Power Sources*, 257:1–11, 2014.
+2. X. Lin, H. E. Perez, S. Mohan, J. B. Siegel, A. G. Stefanopoulou, Y. Ding, M. P. Castanier. A lumped-parameter electro-thermal model for cylindrical batteries. *Journal of Power Sources*, 257:1–11, 2014. doi:10.1016/j.jpowsour.2014.01.097
 3. J. García, F. Fernández. A comprehensive survey on safe reinforcement learning. *Journal of Machine Learning Research*, 16:1437–1480, 2015.
 4. M. Raissi, P. Perdikaris, G. E. Karniadakis. Physics-informed neural networks: a deep learning framework for solving forward and inverse problems involving nonlinear partial differential equations. *Journal of Computational Physics*, 378:686–707, 2019.
 5. A. Mesbah. Stochastic model predictive control with active uncertainty learning: a survey on dual control. *Annual Reviews in Control*, 45:107–117, 2018.
