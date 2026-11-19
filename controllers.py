@@ -251,11 +251,13 @@ class PPOController(Controller):
         import json
         from pathlib import Path
 
+        import torch
         from stable_baselines3 import PPO
         from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
         from thermal_env import ObsBuilder, ThermalEnv
 
+        torch.set_num_threads(1)  # evaluation runs one process per core
         final_dir = Path(final_dir)
         cfg = json.loads((final_dir / "config.json").read_text())
         self.variant, self.train_seed = cfg["variant"], cfg["seed"]

@@ -466,7 +466,8 @@ def plot_pareto(df: pd.DataFrame, names) -> None:
         for n in names:
             st = style(n)
             m = mean.loc[(scen, n)]
-            ax.plot(m.energy, m.deg_s, ls="none", marker=st["marker"], ms=8, color=st["color"],
+            ax.plot(m.energy, m.deg_s, ls="none", marker=st["marker"], ms=13 if st["marker"] == "*" else 8,
+                    color=st["color"],
                     mfc=st.get("mfc", st["color"]), mec=st["color"] if st.get("mfc") else SURFACE,
                     mew=1.5 if st.get("mfc") else 1.0, zorder=3)
         ax.set_title(scen.replace("_", " "), loc="left")
@@ -474,7 +475,8 @@ def plot_pareto(df: pd.DataFrame, names) -> None:
         ax.set_yscale("symlog", linthresh=1.0)
         ax.set_ylim(-0.3, 300)
     axes.flat[-1].axis("off")
-    handles = [plt.Line2D([], [], ls="none", marker=style(n)["marker"], ms=8, color=style(n)["color"],
+    handles = [plt.Line2D([], [], ls="none", marker=style(n)["marker"], ms=13 if style(n)["marker"] == "*" else 8,
+                          color=style(n)["color"],
                           mfc=style(n).get("mfc", style(n)["color"]), label=style(n)["label"]) for n in names]
     axes.flat[-1].legend(handles=handles, loc="center left", fontsize=9)
     for ax in axes[:, 0]:
@@ -493,34 +495,43 @@ def plot_pareto(df: pd.DataFrame, names) -> None:
 
 def plot_rq3(df: pd.DataFrame) -> None:
     """RQ3: does giving the policy the estimator's output (and its uncertainty) help?
-    Policies without the shield, so the comparison is about the policy alone."""
-    mean, std = aggregate(df)
+    Policies without the shield, so the comparison is about the policy alone. Bars are means
+    over training seeds; whiskers span the lowest to highest training seed (3 seeds is too
+    few for a meaningful standard deviation)."""
     modes = [("ppo_dr_raw", "raw surface readings only"), ("ppo_dr_nosigma", "estimate, no σ"),
              ("ppo_dr", "estimate + σ (full)")]
     ramp = ["#86b6ef", "#2a78d6", "#104281"]  # ordinal blue ramp: more estimator information
+    per_seed = (df[df.controller.isin([m for m, _ in modes])]
+                .groupby(["scenario", "controller", "train_seed"]).mean(numeric_only=True))
+    g = per_seed.groupby(["scenario", "controller"])
+    mean, lo, hi = g.mean(), g.min(), g.max()
     scens = list(SCENARIOS)
     y = np.arange(len(scens))
     h = 0.26
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), sharey=True)
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.9), sharey=True)
     for ax, (metric, title) in zip(axes, [("energy", "Cooling energy (pump-s)"),
                                           ("deg_s", "Degree-s above 45 °C (lower is safer)")]):
         for i, ((name, label), col) in enumerate(zip(modes, ramp)):
-            vals = [mean.loc[(s, name), metric] for s in scens]
-            errs = [std.loc[(s, name), metric] for s in scens]
-            ax.barh(y + (i - 1) * (h + 0.03), vals, height=h, color=col, edgecolor=SURFACE, lw=1,
-                    label=label, zorder=2)
-            ax.errorbar(vals, y + (i - 1) * (h + 0.03), xerr=errs, fmt="none", ecolor=INK2, elinewidth=0.8,
-                        capsize=0, zorder=3)
+            vals = np.array([mean.loc[(s, name), metric] for s in scens])
+            lows = np.array([lo.loc[(s, name), metric] for s in scens])
+            highs = np.array([hi.loc[(s, name), metric] for s in scens])
+            yy = y + (i - 1) * (h + 0.03)
+            ax.barh(yy, vals, height=h, color=col, edgecolor=SURFACE, lw=1, label=label, zorder=2)
+            ax.hlines(yy, lows, highs, color=INK2, lw=0.9, zorder=3)
         ax.set_title(title, loc="left")
         ax.grid(axis="y", visible=False)
+        ax.set_xlim(left=0)
     axes[0].set_yticks(y)
     axes[0].set_yticklabels([s.replace("_", " ") for s in scens])
     axes[0].invert_yaxis()
-    axes[0].legend(loc="lower right", fontsize=8, title="policy observes", title_fontsize=8)
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=8.5, title="policy observes",
+               title_fontsize=8.5, bbox_to_anchor=(0.5, 0.0))
     n_train = df.loc[df.controller == "ppo_dr", "train_seed"].nunique()
-    fig.suptitle(f"RQ3: what the policy observes (PPO with DR, no shield; mean ± std over {n_train} "
-                 "training seeds)", x=0.01, ha="left", fontsize=11, fontweight="bold")
-    fig.tight_layout()
+    fig.suptitle(f"RQ3: what the policy observes (PPO with DR, no shield). Bars: mean of {n_train} "
+                 "training seeds; whiskers: lowest to highest seed", x=0.01, ha="left", fontsize=11,
+                 fontweight="bold")
+    fig.tight_layout(rect=(0, 0.1, 1, 1))
     fig.savefig(RESULTS / "rq3_ablation.png", dpi=150)
     plt.close(fig)
 

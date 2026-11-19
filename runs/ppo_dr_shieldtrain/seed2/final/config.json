@@ -1,0 +1,25 @@
+{
+  "variant": "ppo_dr_shieldtrain",
+  "seed": 2,
+  "timesteps": 507904,
+  "n_envs": 8,
+  "env": {
+    "obs_mode": "full",
+    "dr": true,
+    "shield": true
+  },
+  "ppo": {
+    "gamma": 0.995,
+    "n_steps": 1024,
+    "batch_size": 256,
+    "n_epochs": 10,
+    "learning_rate": 0.0003,
+    "ent_coef": 0.0,
+    "policy_kwargs": {
+      "net_arch": [
+        64,
+        64
+      ]
+    }
+  }
+}
