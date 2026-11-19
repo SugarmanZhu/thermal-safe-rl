@@ -204,3 +204,72 @@ def test_shield_returns_rl_action_when_safe_and_full_cooling_when_not():
     assert sh.safe_action(sim, 0.0) == 0.0  # cool cell, low current: no intervention
     sim.est.x[0] = 46.0  # pretend the core is already too hot
     assert sh.safe_action(sim, 0.0) == 1.0
+
+
+# -- RL environment ------------------------------------------------------------------
+
+gym = pytest.importorskip("gymnasium")
+
+
+@pytest.mark.parametrize("mode, dim", [("full", 7), ("no_sigma", 6), ("raw", 22)])
+def test_env_episode_shape_and_truncation(mode, dim):
+    from thermal_env import ThermalEnv
+
+    env = ThermalEnv(obs_mode=mode, dr=True)
+    obs, _ = env.reset(seed=0)
+    assert obs.shape == (dim,) and obs.dtype == np.float32
+    steps, done = 0, False
+    while not done:
+        obs, r, term, trunc, info = env.step(env.action_space.sample())
+        steps += 1
+        done = term or trunc
+        assert not term and np.isfinite(r) and r <= 0.0
+    assert steps == 900 and "episode_stats" in info
+
+
+def test_env_reward_matches_definition():
+    from thermal_env import ThermalEnv
+
+    env = ThermalEnv(scenario=SCENARIOS["heat_mismatch"])
+    env.reset(seed=3)
+    u_prev = 0.0
+    for a in np.linspace(-1, 1, 50):
+        _, r, _, _, info = env.step(np.array([a], dtype=np.float32))
+        u = (a + 1) / 2
+        expected = -u**3 - 10 * info["violation"] - 0.01 * abs(u - u_prev)
+        assert r == pytest.approx(expected, abs=1e-6)
+        u_prev = u
+
+
+@pytest.mark.parametrize("mode", ["full", "no_sigma", "raw"])
+def test_training_and_evaluation_see_the_same_observation(mode):
+    """The env (training) and ObsBuilder on a plain ThermalSim (evaluation) must agree."""
+    from thermal_env import ObsBuilder, ThermalEnv
+
+    env = ThermalEnv(obs_mode=mode, scenario=SCENARIOS["outage"])
+    obs_env, _ = env.reset(seed=0, options={"episode_seed": 7})
+    sim = ThermalSim(SCENARIOS["outage"], KalmanFilter(augment=True))
+    sim.reset(7)
+    ob = ObsBuilder(mode)
+    rng = np.random.default_rng(0)
+    for _ in range(300):
+        np.testing.assert_allclose(obs_env, ob(sim), rtol=0, atol=1e-6)
+        u = rng.random()
+        obs_env, *_ = env.step(np.array([2 * u - 1], dtype=np.float32))
+        sim.step(u)
+
+
+def test_true_core_temperature_is_not_observed():
+    """Changing only the true core temperature must not change the observation."""
+    from thermal_env import ObsBuilder
+
+    sim = ThermalSim(SCENARIOS["nominal"], KalmanFilter(augment=True))
+    sim.reset(0)
+    for _ in range(50):
+        sim.step(0.5)
+    for mode in ("full", "no_sigma"):
+        a = ObsBuilder(mode)(sim)
+        sim.x[0] += 5.0
+        b = ObsBuilder(mode)(sim)
+        sim.x[0] -= 5.0
+        np.testing.assert_array_equal(a, b)

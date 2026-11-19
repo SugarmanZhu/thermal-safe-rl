@@ -86,19 +86,26 @@ pip install -r requirements.txt
 python -m pytest -q                 # 19 checks: physics, discretisation, scenarios, filters, shield
 python evaluate.py estimation       # RQ1: results/estimation.*, results/calibration.png (~30 s)
 python evaluate.py tune-pid         # PID gain search on tuning seeds (~30 s on 4 cores)
-python evaluate.py controllers      # results/controllers.*, pareto.png, trajectory_*.png (~3 min on 4 cores)
 python evaluate.py shield-sweep     # results/shield_tradeoff.* (~1 min on 4 cores)
+python run_all.py                   # train 5 PPO variants x 3 seeds (~30-40 min on 4 CPU cores)
+python evaluate.py training         # training-time safety: results/training_safety.*
+python evaluate.py controllers      # all controllers incl. PPO: results/controllers.*, pareto.png, rq3_ablation.png
 ```
+
+No GPU is needed. On free cloud machines, use `notebooks/colab_debug.ipynb` for a quick test and `notebooks/kaggle_train.ipynb` for the full run (Accelerator *None*, then *Save & Run All*, which keeps running after you close the browser).
 
 ## Code
 
 | File | Contents |
 |---|---|
-| `thermal_env.py` | Cell parameters, exact discretisation, drive cycles, scenarios, `ThermalSim` (plant + estimator for one episode) |
+| `thermal_env.py` | Cell parameters, exact discretisation, drive cycles, scenarios, `ThermalSim` (plant + estimator for one episode), `ObsBuilder` and the Gymnasium `ThermalEnv` |
 | `estimators.py` | `KalmanFilter(augment=False/True)`: KF and AKF, plus batch open-loop forecasts for the shield and MPC |
-| `controllers.py` | Always-on, PID / oracle PID, `Shield` with `BackupCheck`, shield-only, MPC |
-| `evaluate.py` | Estimation study, PID tuning, controller comparison, shield trade-off sweep |
-| `tests/test_physics.py` | Unit tests: physics, filters and the shield |
+| `controllers.py` | Always-on, PID / oracle PID, `Shield` with `BackupCheck`, shield-only, MPC, `PPOController` |
+| `train.py` | One PPO run: variants, checkpoints every 50k steps, `--resume`, training-time safety log |
+| `run_all.py` | All variants × seeds in parallel; skips finished runs, resumes unfinished ones, `--max-hours` |
+| `evaluate.py` | Estimation study, PID tuning, controller comparison (incl. PPO), shield sweep, training safety |
+| `notebooks/` | Colab (debug) and Kaggle (full training) notebooks |
+| `tests/test_physics.py` | Unit tests: physics, filters, shield, and the RL environment (incl. train/eval observation match) |
 
 Seeds: evaluation uses seeds 0–19; tuning (PID gains, shield design choices) used seeds 1000–1019.
 

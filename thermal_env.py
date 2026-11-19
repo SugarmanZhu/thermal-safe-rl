@@ -206,7 +206,10 @@ class ThermalSim:
         self.n_steps = n_steps
         self.est = estimator if estimator is not None else KalmanFilter(augment=True)
 
-    def reset(self, seed: int) -> None:
+    def reset(self, seed: int, scenario: Scenario | None = None) -> None:
+        if scenario is not None:  # per-episode scenario (domain randomisation in training)
+            self.scenario = scenario
+            self.true_params = self.params.scaled(Rc_scale=scenario.Rc_scale)
         n = self.n_steps
         self.ep = make_episode(self.scenario, seed, n)
         self.k = 0
@@ -276,3 +279,148 @@ class ThermalSim:
         h["Tc_hat"][k], h["Ts_hat"][k] = self.est.x[0], self.est.x[1]
         h["sigma"][k], h["theta"][k] = self.est.sigma_Tc, self.est.theta_hat
         h["P2"][k] = self.est.P[:2, :2]
+
+
+# ---------------------------------------------------------------------------
+# Observations and the Gymnasium environment (RL)
+# ---------------------------------------------------------------------------
+
+OBS_MODES = ("full", "no_sigma", "raw")
+RAW_HISTORY = 10  # surface readings in the `raw` observation (20 s)
+
+
+class ObsBuilder:
+    """Builds the policy observation from a ThermalSim. Shared by the env and the
+    evaluation controller, so training and testing see exactly the same thing.
+
+    full:     [Tc_hat, sigma_Tc, theta_hat, Ts_last, sensor_ok, I, u_prev]
+    no_sigma: [Tc_hat, theta_hat, Ts_last, sensor_ok, I, u_prev]
+    raw:      last 10 surface readings, their sensor_ok flags, I, u_prev (no estimator)
+
+    Ts_last is the last valid reading (held during outages). The true core temperature is
+    never part of the observation. Call once per sample, in order: the raw mode keeps a
+    history.
+    """
+
+    def __init__(self, mode: str = "full"):
+        assert mode in OBS_MODES, mode
+        self.mode = mode
+        self.dim = {"full": 7, "no_sigma": 6, "raw": 2 * RAW_HISTORY + 2}[mode]
+        self._hist_T: list[float] = []
+        self._hist_ok: list[float] = []
+
+    def reset(self) -> None:
+        self._hist_T, self._hist_ok = [], []
+
+    def __call__(self, sim: ThermalSim) -> np.ndarray:
+        Ts = sim.Ts_last if np.isfinite(sim.Ts_last) else float(sim.est.x[1])
+        ok = float(sim.sensor_ok)
+        # Rough centring/scaling; VecNormalize does the rest.
+        I, u = sim.I_now / I_MAX, sim.u_prev
+        if self.mode == "raw":
+            if not self._hist_T:
+                self._hist_T = [Ts] * RAW_HISTORY
+                self._hist_ok = [ok] * RAW_HISTORY
+            self._hist_T = self._hist_T[1:] + [Ts]
+            self._hist_ok = self._hist_ok[1:] + [ok]
+            temps = (np.array(self._hist_T) - NOMINAL.Tf) / 10.0
+            return np.concatenate([temps, self._hist_ok, [I, u]]).astype(np.float32)
+        est = sim.est
+        theta = est.theta_hat if est.augment else 1.0
+        core = [(est.Tc_hat - NOMINAL.Tf) / 10.0]
+        sigma = [est.sigma_Tc] if self.mode == "full" else []
+        rest = [theta, (Ts - NOMINAL.Tf) / 10.0, ok, I, u]
+        return np.array(core + sigma + rest, dtype=np.float32)
+
+
+def sample_training_scenario(rng: np.random.Generator, dr: bool) -> Scenario:
+    """Training conditions. Every variant sees some extra sensor noise
+    and outages in half of the episodes; `dr` also randomises the cell's heat generation
+    and core-to-surface resistance."""
+    return Scenario(
+        name="train",
+        R_int_scale=rng.uniform(0.8, 1.3) if dr else 1.0,
+        Rc_scale=rng.uniform(0.8, 1.2) if dr else 1.0,
+        noise_scale=rng.uniform(1.0, 1.5),
+        outage_frac=0.2 if rng.random() < 0.5 else 0.0,
+    )
+
+
+try:
+    import gymnasium as gym
+    from gymnasium import spaces
+except ImportError:  # the RL parts need gymnasium; the rest of the module does not
+    gym = None
+
+if gym is not None:
+
+    class ThermalEnv(gym.Env):
+        """Gymnasium wrapper around ThermalSim.
+
+        Action a in [-1, 1] maps to cooling u = (a + 1) / 2 (SB3 prefers symmetric actions).
+        Reward per step: -u^3 - 10 * max(0, Tc_true - 45) - 0.01 * |u - u_prev|, using the true
+        core temperature (privileged training: only the simulator knows it).
+
+        With shield=True the uncertainty-aware shield is part of the environment: the
+        executed action is the shielded one, and the policy pays an extra
+        intervention_penalty * (u_safe - u_rl) so it does not simply lean on the shield.
+
+        scenario=None samples a training scenario per episode; otherwise it is fixed.
+        """
+
+        metadata = {"render_modes": []}
+
+        def __init__(self, obs_mode: str = "full", dr: bool = False, shield: bool = False,
+                     intervention_penalty: float = 0.1, scenario: Scenario | None = None,
+                     augment: bool = True):
+            from controllers import Shield
+            from estimators import KalmanFilter
+
+            super().__init__()
+            self.obs_builder = ObsBuilder(obs_mode)
+            self.dr, self.fixed_scenario = dr, scenario
+            self.shield = Shield() if shield else None
+            self.intervention_penalty = intervention_penalty
+            self.sim = ThermalSim(scenario or SCENARIOS["nominal"], KalmanFilter(augment=augment))
+            self.observation_space = spaces.Box(-np.inf, np.inf, (self.obs_builder.dim,), np.float32)
+            self.action_space = spaces.Box(-1.0, 1.0, (1,), np.float32)
+
+        def reset(self, *, seed: int | None = None, options: dict | None = None):
+            super().reset(seed=seed)
+            rng = self.np_random
+            scen = self.fixed_scenario or sample_training_scenario(rng, self.dr)
+            # Episode seeds stay clear of evaluation (0-19) and tuning (1000-1019) seeds.
+            ep_seed = int(rng.integers(1_000_000, 2**31 - 1))
+            if options and "episode_seed" in options:
+                ep_seed = int(options["episode_seed"])
+            self.sim.reset(ep_seed, scen)
+            self.obs_builder.reset()
+            if self.shield is not None:
+                self.shield.reset()
+            self._ep = {"energy": 0.0, "deg_s": 0.0, "interventions": 0, "max_Tc": self.sim.Tc_true}
+            return self.obs_builder(self.sim), {"R_int_scale": scen.R_int_scale, "Rc_scale": scen.Rc_scale}
+
+        def step(self, action):
+            u_rl = float(np.clip((float(np.asarray(action).ravel()[0]) + 1.0) / 2.0, 0.0, 1.0))
+            u = u_rl
+            if self.shield is not None:
+                u = self.shield.safe_action(self.sim, u_rl)
+            u_prev = self.sim.u_prev
+            info = self.sim.step(u)
+            reward = -(u**3) - 10.0 * info["violation"] - 0.01 * abs(u - u_prev)
+            if self.shield is not None:
+                reward -= self.intervention_penalty * (u - u_rl)
+            ep = self._ep
+            ep["energy"] += info["energy"]
+            ep["deg_s"] += info["violation"] * DT
+            ep["interventions"] += int(u > u_rl + 1e-9)
+            ep["max_Tc"] = max(ep["max_Tc"], info["Tc_true"])
+            info.update(u=u, u_rl=u_rl)
+            truncated = self.sim.done
+            if truncated:
+                info["episode_stats"] = {
+                    "energy": ep["energy"], "deg_s": ep["deg_s"], "max_Tc": ep["max_Tc"],
+                    "shield_rate": 100.0 * ep["interventions"] / self.sim.n_steps,
+                    "R_int_scale": self.sim.scenario.R_int_scale, "Rc_scale": self.sim.scenario.Rc_scale,
+                }
+            return self.obs_builder(self.sim), float(reward), False, truncated, info

@@ -6,3 +6,4 @@ __pycache__/
 # Training outputs: keep each run's final/ folder, ignore checkpoints and logs
 runs/**/checkpoints/
 runs/**/tb/
+runs/**/train.out

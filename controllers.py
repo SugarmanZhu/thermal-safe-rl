@@ -240,6 +240,49 @@ class MPC(Controller):
         return self.u_prev
 
 
+class PPOController(Controller):
+    """A trained PPO policy (from train.py), optionally behind the shield.
+
+    Builds the observation with the same ObsBuilder as the training env, normalises it with
+    the saved VecNormalize statistics, and acts deterministically.
+    """
+
+    def __init__(self, final_dir, shield: bool = False):
+        import json
+        from pathlib import Path
+
+        from stable_baselines3 import PPO
+        from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+
+        from thermal_env import ObsBuilder, ThermalEnv
+
+        final_dir = Path(final_dir)
+        cfg = json.loads((final_dir / "config.json").read_text())
+        self.variant, self.train_seed = cfg["variant"], cfg["seed"]
+        self.name = self.variant + ("+shield" if shield else "")
+        self.obs_builder = ObsBuilder(cfg["env"]["obs_mode"])
+        self.model = PPO.load(str(final_dir / "model.zip"), device="cpu")
+        env_opts = {k: v for k, v in cfg["env"].items() if k != "shield"}
+        self.vecnorm = VecNormalize.load(str(final_dir / "vecnormalize.pkl"),
+                                         DummyVecEnv([lambda: ThermalEnv(**env_opts)]))
+        self.vecnorm.training = False
+        self.shield = Shield() if shield else None
+
+    def reset(self) -> None:
+        self.obs_builder.reset()
+        if self.shield is not None:
+            self.shield.reset()
+
+    def act(self, sim) -> float:
+        obs = self.vecnorm.normalize_obs(self.obs_builder(sim)[None, :])
+        a, _ = self.model.predict(obs, deterministic=True)
+        u_rl = float(np.clip((float(a.ravel()[0]) + 1.0) / 2.0, 0.0, 1.0))
+        return self.shield.safe_action(sim, u_rl) if self.shield is not None else u_rl
+
+    def stats(self) -> dict:
+        return self.shield.stats() if self.shield is not None else {}
+
+
 def make_controller(name: str) -> Controller:
     factories = {
         "always_on": AlwaysOn,

@@ -2,7 +2,9 @@
 
     python evaluate.py estimation     # RQ1: KF vs AKF in every scenario (no RL needed)
     python evaluate.py tune-pid       # grid search for the PID gains on tuning seeds
-    python evaluate.py controllers    # controllers x scenarios x seeds (RQ2-RQ4)
+    python evaluate.py controllers    # controllers x scenarios x seeds (RQ2-RQ4), incl. trained PPO in runs/
+    python evaluate.py shield-sweep   # shield energy/safety vs assumed worst-case burst length
+    python evaluate.py training       # training-time safety from runs/*/seed*/train_log.csv
 
 Evaluation seeds are 0-19; PID tuning uses seeds 1000-1019.
 """
@@ -199,19 +201,58 @@ def plot_calibration(df: pd.DataFrame) -> None:
 # Controller comparison (RQ2-RQ4)
 # ---------------------------------------------------------------------------
 
-# Reference lines in ink; real controllers take the first three palette slots, which are
-# distinguishable for every pair (scatter plots compare all pairs, not just neighbours).
+# Scatter plots compare every pair of colours, and only three palette hues stay
+# distinguishable that way. So colour marks the family (orange = PID, aqua = model-based
+# safety, blue = PPO, grey = references) and marker shape/fill marks the member.
+ORANGE, AQUA, BLUE = "#eb6834", "#1baf7a", "#2a78d6"
 CTRL_STYLE = {
     "always_on": dict(color=INK2, marker="s", mfc="none", label="always on (floor)"),
     "oracle_pid": dict(color=INK2, marker="D", mfc="none", label="oracle PID (sees true core)"),
-    "pid": dict(color="#eb6834", marker="o", label="PID"),
-    "shield_only_nobackup": dict(color="#1baf7a", marker="^", mfc="none",
-                                 label="shield only, v1 (no backup check)"),
-    "shield_only": dict(color="#1baf7a", marker="^", label="shield only (backup check)"),
-    "mpc": dict(color="#2a78d6", marker="v", label="MPC (backup check)"),
+    "pid": dict(color=ORANGE, marker="o", label="PID"),
+    "shield_only_nobackup": dict(color=AQUA, marker="^", mfc="none", label="shield only, v1 (no backup check)"),
+    "shield_only": dict(color=AQUA, marker="^", label="shield only (backup check)"),
+    "mpc": dict(color=AQUA, marker="v", label="MPC (backup check)"),
+    "ppo_dr": dict(color=BLUE, marker="o", mfc="none", label="PPO (DR), no shield"),
+    "ppo_dr+shield": dict(color=BLUE, marker="*", label="PPO (DR) + shield"),
+    "ppo_dr_shieldtrain+shield": dict(color=BLUE, marker="P", label="PPO trained with shield + shield"),
+    "ppo": dict(color=BLUE, marker="X", mfc="none", label="PPO (no DR), no shield"),
+    "ppo+shield": dict(color=BLUE, marker="X", label="PPO (no DR) + shield"),
 }
+PARETO_SET = ["always_on", "oracle_pid", "pid", "shield_only_nobackup", "shield_only", "mpc",
+              "ppo_dr", "ppo_dr+shield", "ppo_dr_shieldtrain+shield"]
+TRACE_SET = ["always_on", "pid", "shield_only", "mpc", "ppo_dr", "ppo_dr+shield"]
 TRACE_SCENARIOS = ("nominal", "resistance_mismatch")
 TRACE_SEED = 0
+RUNS = Path(__file__).resolve().parent / "runs"
+
+
+def style(name: str) -> dict:
+    return CTRL_STYLE.get(name, dict(color=BLUE, marker="h", label=name))
+
+
+def discover_runs(runs_dir: Path) -> dict[str, dict[int, Path]]:
+    """{variant: {train_seed: final_dir}} for every finished training run."""
+    found: dict[str, dict[int, Path]] = {}
+    for cfg in sorted(Path(runs_dir).glob("*/seed*/final/config.json")):
+        final = cfg.parent
+        if (final / "model.zip").exists():
+            variant, seed = final.parent.parent.name, int(final.parent.name.removeprefix("seed"))
+            found.setdefault(variant, {})[seed] = final
+    return found
+
+
+_PPO_CACHE: dict = {}
+
+
+def _make(ctrl_name: str, final_dir):
+    from controllers import PPOController, make_controller
+
+    if final_dir is None:
+        return make_controller(ctrl_name)
+    key = (str(final_dir), ctrl_name.endswith("+shield"))
+    if key not in _PPO_CACHE:  # loading a policy is slow; reuse it within a worker
+        _PPO_CACHE[key] = PPOController(final_dir, shield=key[1])
+    return _PPO_CACHE[key]
 
 
 def _log_energy_axis(ax) -> None:
@@ -237,11 +278,13 @@ def control_metrics(h: dict) -> dict:
 
 
 def run_controller_episode(job: tuple) -> tuple[dict, dict | None]:
-    """job = (controller, scenario, seed, estimator, pid_gains or None). Top-level for multiprocessing."""
-    from controllers import PID, make_controller
+    """job = (controller, scenario, seed, estimator, pid_gains or None[, final_dir or None]).
+    Top-level so it can run in a process pool."""
+    from controllers import PID
 
-    ctrl_name, scen, seed, estimator, gains = job
-    ctrl = PID(**gains) if gains is not None else make_controller(ctrl_name)
+    ctrl_name, scen, seed, estimator, gains = job[:5]
+    final_dir = job[5] if len(job) > 5 else None
+    ctrl = PID(**gains) if gains is not None else _make(ctrl_name, final_dir)
     sim = ThermalSim(SCENARIOS[scen], KalmanFilter(augment=(estimator == "akf")))
     sim.reset(seed)
     ctrl.reset()
@@ -249,10 +292,11 @@ def run_controller_episode(job: tuple) -> tuple[dict, dict | None]:
         sim.step(ctrl.act(sim))
     h = sim.hist
     est = estimation_metrics(h)
-    row = {"controller": ctrl_name, "scenario": scen, "seed": seed, "estimator": estimator,
-           **control_metrics(h), **ctrl.stats(),
+    train_seed = getattr(ctrl, "train_seed", -1)
+    row = {"controller": ctrl_name, "train_seed": train_seed, "scenario": scen, "seed": seed,
+           "estimator": estimator, **control_metrics(h), **ctrl.stats(),
            "est_rmse": est["rmse"], "est_coverage": est["coverage_2sigma"], "est_nis": est["nis"]}
-    keep = seed == TRACE_SEED and scen in TRACE_SCENARIOS and gains is None
+    keep = seed == TRACE_SEED and scen in TRACE_SCENARIOS and gains is None and train_seed <= 0
     return row, (h if keep else None)
 
 
@@ -279,10 +323,29 @@ def tune_pid(n_jobs: int, seeds=range(1000, 1020)) -> None:
     print(res.sort_values("objective").head(10).to_string())
 
 
-def controller_study(names: list[str], n_seeds: int, estimator: str, n_jobs: int) -> pd.DataFrame:
-    jobs = [(c, s, seed, estimator, None) for c in names for s in SCENARIOS for seed in range(n_seeds)]
+def default_controllers(runs: dict) -> list[str]:
+    from controllers import BASELINES
+
+    rl = [n for v in runs for n in (v, f"{v}+shield")]
+    return BASELINES + rl
+
+
+def controller_study(names: list[str], n_seeds: int, estimator: str, n_jobs: int,
+                     runs: dict | None = None) -> pd.DataFrame:
+    runs = runs or {}
+    jobs = []
+    for c in names:
+        variant = c.removesuffix("+shield")
+        if variant in runs:  # one controller per trained seed
+            jobs += [(c, s, seed, estimator, None, final) for final in runs[variant].values()
+                     for s in SCENARIOS for seed in range(n_seeds)]
+        elif variant.startswith("ppo"):
+            print(f"skipping {c}: no finished runs found")
+        else:
+            jobs += [(c, s, seed, estimator, None, None) for s in SCENARIOS for seed in range(n_seeds)]
     out = _pool_map(run_controller_episode, jobs, n_jobs)
     df = pd.DataFrame([r for r, _ in out])
+    names = [n for n in names if n in set(df.controller)]
     traces = {(r["controller"], r["scenario"]): h for r, h in out if h is not None}
     suffix = "" if estimator == "akf" else f"_{estimator}"
     RESULTS.mkdir(exist_ok=True)
@@ -290,8 +353,10 @@ def controller_study(names: list[str], n_seeds: int, estimator: str, n_jobs: int
     write_controller_tables(df, names, suffix, estimator, n_seeds)
     if estimator == "akf":
         for scen in TRACE_SCENARIOS:
-            plot_trajectories(traces, names, scen)
-        plot_pareto(df, names)
+            plot_trajectories(traces, [n for n in TRACE_SET if n in names], scen)
+        plot_pareto(df, [n for n in PARETO_SET if n in names])
+        if {"ppo_dr", "ppo_dr_nosigma", "ppo_dr_raw"} <= set(names):
+            plot_rq3(df)
     return df
 
 
@@ -299,12 +364,31 @@ def _fmt(m: float, s: float, digits: int = 1) -> str:
     return f"{m:.{digits}f} ± {s:.{digits}f}"
 
 
+def aggregate(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Mean and std per (scenario, controller). For trained policies the std is across
+    training seeds (each first averaged over its evaluation episodes); for the rest it is
+    across episodes."""
+    df = df.copy()
+    if "train_seed" not in df:
+        df["train_seed"] = -1
+    df["train_seed"] = df["train_seed"].fillna(-1)
+    rl = df.train_seed >= 0
+    per_seed = df[rl].groupby(["scenario", "controller", "train_seed"]).mean(numeric_only=True).reset_index()
+    keys = ["scenario", "controller"]
+    parts = [d.groupby(keys) for d in (df[~rl], per_seed) if len(d)]
+    mean = pd.concat([g.mean(numeric_only=True) for g in parts])
+    std = pd.concat([g.std(numeric_only=True) for g in parts])
+    return mean, std
+
+
 def write_controller_tables(df: pd.DataFrame, names, suffix: str, estimator: str, n_seeds: int) -> None:
     order = {n: i for i, n in enumerate(names)}
-    g = df.groupby(["scenario", "controller"], sort=False)
-    mean, std = g.mean(numeric_only=True), g.std(numeric_only=True)
-    lines = [f"Controller comparison: {n_seeds} seeds per cell, estimator {estimator.upper()}, "
-             "mean ± std over seeds. Generated by `python evaluate.py controllers`.\n",
+    mean, std = aggregate(df)
+    n_train = df.loc[df.get("train_seed", pd.Series(-1, index=df.index)) >= 0, "train_seed"].nunique()
+    rl_note = (f" For PPO rows, ± is the std across {n_train} training seeds, each averaged over its "
+               "evaluation episodes." if n_train else "")
+    lines = [f"Controller comparison: {n_seeds} evaluation seeds per cell, estimator {estimator.upper()}, "
+             "mean ± std over episodes." + rl_note + " Generated by `python evaluate.py controllers`.\n",
              "Energy is pump-seconds at full power (always on = 1800). Degree-seconds = "
              "∫ max(0, Tc − 45 °C) dt.\n"]
     for metric, title, digits in [("energy", "Cooling energy (pump-seconds)", 0),
@@ -313,7 +397,7 @@ def write_controller_tables(df: pd.DataFrame, names, suffix: str, estimator: str
         piv = mean[metric].unstack("scenario")[list(SCENARIOS)]
         if metric == "any_violation":
             piv = piv * 100
-        piv = piv.loc[sorted(piv.index, key=order.get)]
+        piv = piv.loc[sorted(piv.index, key=lambda n: order.get(n, 999))]
         lines += [f"\n### {title}\n", piv.round(digits).to_markdown() + "\n"]
     full = []
     for (scen, ctrl), m in mean.iterrows():
@@ -327,7 +411,7 @@ def write_controller_tables(df: pd.DataFrame, names, suffix: str, estimator: str
                      "shield active (% steps)": f"{m.shield_rate:.1f}" if "shield_rate" in m and
                      not np.isnan(m.shield_rate) else "–"})
     full = pd.DataFrame(full)
-    full["_o"] = full["controller"].map(order)
+    full["_o"] = full["controller"].map(lambda n: order.get(n, 999))
     full = full.sort_values(["scenario", "_o"], key=lambda c: c.map(
         {n: i for i, n in enumerate(SCENARIOS)}) if c.name == "scenario" else c).drop(columns="_o")
     lines += ["\n### Full table\n", full.to_markdown(index=False) + "\n"]
@@ -352,7 +436,7 @@ def plot_trajectories(traces: dict, names, scen: str) -> None:
         a1.axhline(T_LIMIT, color=MUTED, lw=1, ls="--")
         a1.set_ylim(24, 48)
         a1.set_ylabel("core (°C)")
-        a1.set_title(f"{CTRL_STYLE[n]['label']}: max {m['max_Tc']:.1f} °C, "
+        a1.set_title(f"{style(n)['label']}: max {m['max_Tc']:.1f} °C, "
                      f"{m['deg_s']:.1f} degree-s above 45 °C", loc="left", fontsize=9)
         a2 = fig.add_subplot(gs[row, 1], sharex=ax)
         a2.fill_between(t[:-1], 0, h["u"][:-1], step="post", color="#2a78d6", alpha=0.25, lw=0)
@@ -375,12 +459,12 @@ def plot_trajectories(traces: dict, names, scen: str) -> None:
 
 
 def plot_pareto(df: pd.DataFrame, names) -> None:
-    mean = df.groupby(["scenario", "controller"]).mean(numeric_only=True)
+    mean = aggregate(df)[0]
     scens = list(SCENARIOS)
     fig, axes = plt.subplots(2, 4, figsize=(12, 6.2), sharex=True, sharey=True)
     for ax, scen in zip(axes.flat, scens):
         for n in names:
-            st = CTRL_STYLE[n]
+            st = style(n)
             m = mean.loc[(scen, n)]
             ax.plot(m.energy, m.deg_s, ls="none", marker=st["marker"], ms=8, color=st["color"],
                     mfc=st.get("mfc", st["color"]), mec=st["color"] if st.get("mfc") else SURFACE,
@@ -390,9 +474,8 @@ def plot_pareto(df: pd.DataFrame, names) -> None:
         ax.set_yscale("symlog", linthresh=1.0)
         ax.set_ylim(-0.3, 300)
     axes.flat[-1].axis("off")
-    handles = [plt.Line2D([], [], ls="none", marker=CTRL_STYLE[n]["marker"], ms=8,
-                          color=CTRL_STYLE[n]["color"], mfc=CTRL_STYLE[n].get("mfc", CTRL_STYLE[n]["color"]),
-                          label=CTRL_STYLE[n]["label"]) for n in names]
+    handles = [plt.Line2D([], [], ls="none", marker=style(n)["marker"], ms=8, color=style(n)["color"],
+                          mfc=style(n).get("mfc", style(n)["color"]), label=style(n)["label"]) for n in names]
     axes.flat[-1].legend(handles=handles, loc="center left", fontsize=9)
     for ax in axes[:, 0]:
         ax.set_ylabel("degree-s above 45 °C\n(symlog; lower is safer)")
@@ -400,11 +483,107 @@ def plot_pareto(df: pd.DataFrame, names) -> None:
         ax.set_xlabel("cooling energy, pump-s (log)")
     axes[0, 3].set_xlabel("cooling energy, pump-s (log)")
     axes[0, 3].xaxis.set_tick_params(labelbottom=True)
-    fig.suptitle(f"Energy vs safety, mean of {df.seed.nunique()} seeds per point "
+    fig.suptitle(f"Energy vs safety, mean of {df.seed.nunique()} evaluation seeds per point "
                  "(bottom-left is best; table: results/controllers.md)",
                  x=0.01, ha="left", fontsize=11, fontweight="bold")
     fig.tight_layout()
     fig.savefig(RESULTS / "pareto.png", dpi=150)
+    plt.close(fig)
+
+
+def plot_rq3(df: pd.DataFrame) -> None:
+    """RQ3: does giving the policy the estimator's output (and its uncertainty) help?
+    Policies without the shield, so the comparison is about the policy alone."""
+    mean, std = aggregate(df)
+    modes = [("ppo_dr_raw", "raw surface readings only"), ("ppo_dr_nosigma", "estimate, no σ"),
+             ("ppo_dr", "estimate + σ (full)")]
+    ramp = ["#86b6ef", "#2a78d6", "#104281"]  # ordinal blue ramp: more estimator information
+    scens = list(SCENARIOS)
+    y = np.arange(len(scens))
+    h = 0.26
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4.6), sharey=True)
+    for ax, (metric, title) in zip(axes, [("energy", "Cooling energy (pump-s)"),
+                                          ("deg_s", "Degree-s above 45 °C (lower is safer)")]):
+        for i, ((name, label), col) in enumerate(zip(modes, ramp)):
+            vals = [mean.loc[(s, name), metric] for s in scens]
+            errs = [std.loc[(s, name), metric] for s in scens]
+            ax.barh(y + (i - 1) * (h + 0.03), vals, height=h, color=col, edgecolor=SURFACE, lw=1,
+                    label=label, zorder=2)
+            ax.errorbar(vals, y + (i - 1) * (h + 0.03), xerr=errs, fmt="none", ecolor=INK2, elinewidth=0.8,
+                        capsize=0, zorder=3)
+        ax.set_title(title, loc="left")
+        ax.grid(axis="y", visible=False)
+    axes[0].set_yticks(y)
+    axes[0].set_yticklabels([s.replace("_", " ") for s in scens])
+    axes[0].invert_yaxis()
+    axes[0].legend(loc="lower right", fontsize=8, title="policy observes", title_fontsize=8)
+    n_train = df.loc[df.controller == "ppo_dr", "train_seed"].nunique()
+    fig.suptitle(f"RQ3: what the policy observes (PPO with DR, no shield; mean ± std over {n_train} "
+                 "training seeds)", x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(RESULTS / "rq3_ablation.png", dpi=150)
+    plt.close(fig)
+
+
+def training_study(runs_dir: Path) -> pd.DataFrame | None:
+    """Training-time safety: how much do policies violate the limit while they learn?"""
+    rows = []
+    for log in sorted(Path(runs_dir).glob("*/seed*/train_log.csv")):
+        d = pd.read_csv(log)
+        d["variant"], d["train_seed"] = log.parent.parent.name, int(log.parent.name.removeprefix("seed"))
+        rows.append(d)
+    if not rows:
+        print(f"no training logs under {runs_dir}")
+        return None
+    df = pd.concat(rows, ignore_index=True)
+    per_run = df.groupby(["variant", "train_seed"]).agg(
+        episodes=("deg_s", "size"), total_deg_s=("deg_s", "sum"),
+        viol_episodes_pct=("deg_s", lambda x: 100 * (x > 0).mean()),
+        last_energy=("energy", lambda x: x.tail(max(1, len(x) // 10)).mean()))
+    g = per_run.groupby("variant")
+    tab = pd.DataFrame({
+        "training seeds": g.size(),
+        "episodes per run": g.episodes.mean().round(0),
+        "degree-s above 45 °C, whole training": [_fmt(m, s, 0) for m, s in zip(g.total_deg_s.mean(), g.total_deg_s.std().fillna(0))],
+        "episodes with a violation (%)": [_fmt(m, s, 1) for m, s in zip(g.viol_episodes_pct.mean(), g.viol_episodes_pct.std().fillna(0))],
+        "energy per episode, last 10 % of training": g.last_energy.mean().round(0),
+    })
+    RESULTS.mkdir(exist_ok=True)
+    (RESULTS / "training_safety.md").write_text(
+        "Training-time safety (unsafe exploration). Mean ± std over training seeds. Training episodes use "
+        "randomised conditions (extra sensor noise, sensor outages and, with DR, randomised cell parameters). Generated by `python evaluate.py training`.\n\n"
+        + tab.to_markdown() + "\n")
+    plot_training(df)
+    return tab
+
+
+def plot_training(df: pd.DataFrame) -> None:
+    order = [v for v in ("ppo_dr", "ppo", "ppo_dr_shieldtrain", "ppo_dr_nosigma", "ppo_dr_raw")
+             if v in set(df.variant)] + sorted(set(df.variant) - {"ppo_dr", "ppo", "ppo_dr_shieldtrain",
+                                                                   "ppo_dr_nosigma", "ppo_dr_raw"})
+    colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
+    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    for v, col in zip(order, colors):
+        d = df[df.variant == v]
+        grid = np.linspace(0, d.timesteps.max(), 60)
+        cum = [np.interp(grid, r.timesteps, r.deg_s.cumsum()) for _, r in d.groupby("train_seed")]
+        en = [np.interp(grid, r.timesteps, r.energy.rolling(20, min_periods=1).mean()) for _, r in d.groupby("train_seed")]
+        for ax, curves in zip(axes, (cum, en)):
+            c = np.array(curves)
+            ax.plot(grid / 1e3, c.mean(0), color=col, lw=1.8, label=v)
+            if len(c) > 1:
+                ax.fill_between(grid / 1e3, c.min(0), c.max(0), color=col, alpha=0.15, lw=0)
+    axes[0].set_title("Cumulative degree-s above 45 °C during training", loc="left")
+    axes[0].set_ylabel("degree-s (lower is safer)")
+    axes[1].set_title("Energy per training episode (rolling mean of 20)", loc="left")
+    axes[1].set_ylabel("pump-s")
+    for ax in axes:
+        ax.set_xlabel("training steps (thousands)")
+    axes[0].legend(fontsize=8, loc="upper left")
+    fig.suptitle("Learning safely? Mean over training seeds, band = min to max",
+                 x=0.01, ha="left", fontsize=11, fontweight="bold")
+    fig.tight_layout()
+    fig.savefig(RESULTS / "training_safety.png", dpi=150)
     plt.close(fig)
 
 
@@ -430,7 +609,7 @@ def shield_sweep(n_seeds: int, n_jobs: int) -> pd.DataFrame:
     """Shield-only with different worst-case burst assumptions: the price of robustness."""
     jobs = [(b, s, seed) for b in SWEEP_BURSTS_S for s in SWEEP_SCENARIOS for seed in range(n_seeds)]
     df = pd.DataFrame(_pool_map(run_sweep_episode, jobs, n_jobs))
-    ref_jobs = [(c, s, seed, "akf", None) for c in ("always_on", "pid")
+    ref_jobs = [(c, s, seed, "akf", None, None) for c in ("always_on", "pid")
                 for s in SWEEP_SCENARIOS for seed in range(n_seeds)]
     ref = pd.DataFrame([r for r, _ in _pool_map(run_controller_episode, ref_jobs, n_jobs)])
     RESULTS.mkdir(exist_ok=True)
@@ -489,34 +668,44 @@ def plot_shield_tradeoff(df: pd.DataFrame, ref: pd.DataFrame) -> None:
 
 
 def main() -> None:
-    from controllers import BASELINES
-
+    global RESULTS
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--results", type=Path, default=RESULTS, help="output folder (default: results/)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     est = sub.add_parser("estimation", help="KF vs AKF in every scenario")
     est.add_argument("--seeds", type=int, default=20)
     ctl = sub.add_parser("controllers", help="controllers x scenarios x seeds")
-    ctl.add_argument("--controllers", nargs="+", default=BASELINES)
+    ctl.add_argument("--controllers", nargs="+", default=None,
+                     help="default: all baselines plus every trained variant found in --runs, with and without shield")
+    ctl.add_argument("--runs", type=Path, default=RUNS, help="folder with trained policies (train.py output)")
     ctl.add_argument("--seeds", type=int, default=20)
     ctl.add_argument("--estimator", choices=["akf", "kf"], default="akf")
     ctl.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     tun = sub.add_parser("tune-pid", help="grid search for the PID gains (tuning seeds only)")
     tun.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
+    trn = sub.add_parser("training", help="training-time safety from train_log.csv files")
+    trn.add_argument("--runs", type=Path, default=RUNS)
     swp = sub.add_parser("shield-sweep", help="shield energy/safety vs assumed worst-case burst length")
     swp.add_argument("--seeds", type=int, default=20)
     swp.add_argument("--jobs", type=int, default=os.cpu_count() or 1)
     args = ap.parse_args()
+    RESULTS = args.results
     if args.cmd == "estimation":
         df = estimation_study(args.seeds)
         print((RESULTS / "estimation.md").read_text())
         print(f"wrote {RESULTS}/estimation.csv, estimation.md, estimation.png, calibration.png ({len(df)} episodes)")
     elif args.cmd == "controllers":
-        df = controller_study(args.controllers, args.seeds, args.estimator, args.jobs)
+        runs = discover_runs(args.runs)
+        names = args.controllers or default_controllers(runs)
+        df = controller_study(names, args.seeds, args.estimator, args.jobs, runs)
         suffix = "" if args.estimator == "akf" else f"_{args.estimator}"
         print((RESULTS / f"controllers{suffix}.md").read_text())
         print(f"{len(df)} episodes")
     elif args.cmd == "tune-pid":
         tune_pid(args.jobs)
+    elif args.cmd == "training":
+        if training_study(args.runs) is not None:
+            print((RESULTS / "training_safety.md").read_text())
     elif args.cmd == "shield-sweep":
         shield_sweep(args.seeds, args.jobs)
         print((RESULTS / "shield_tradeoff.md").read_text())
