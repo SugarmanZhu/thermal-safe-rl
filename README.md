@@ -160,12 +160,16 @@ All controllers act on the AKF estimate, except the oracle PID, which sees the t
 - **Observation:** never the true core temperature. The policy gets the AKF estimate, σ, θ̂, the last surface reading, a sensor-online flag, the current and the previous u.
 - **Training conditions:** extra sensor noise in every episode and outages in half of them. Domain randomisation (DR) draws R_int ×0.8–1.3 and Rc ×0.8–1.2 per episode.
 
-| Variant | What it tests |
-|---|---|
-| `ppo_dr` | main policy: full observation, domain randomisation |
-| `ppo` | the same without DR |
-| `ppo_dr_nosigma`, `ppo_dr_raw` | RQ3: no σ in the observation; no estimator at all (last 10 surface readings) |
-| `ppo_dr_shieldtrain`, `_p1` | shield active during training, intervention penalty 0.1 or 1.0 |
+We trained six versions of PPO. Each changes **one thing** compared with the main policy, like a controlled experiment, to answer one question. Domain randomisation (DR) means training on many slightly different simulated cells (some make more heat, some have a higher thermal resistance) instead of one standard cell. The intervention penalty is a small deduction from the reward every time the shield has to step in.
+
+| Version | What is different from the main policy | Question it answers | Answer |
+|---|---|---|---|
+| `ppo_dr` (main policy) | – baseline: sees everything the filter provides (estimate, σ, θ̂) and is trained with DR | – | – |
+| `ppo` | trained on the standard cell only (no DR) | Does training on varied cells make the policy robust to model errors? | **Yes.** Without the shield, heat-mismatch episodes over 45 °C drop from 87 % to 50 %. |
+| `ppo_dr_nosigma` | cannot see the filter's uncertainty σ | Does knowing how reliable the estimate is help? | **Somewhat**, mainly under resistance mismatch. |
+| `ppo_dr_raw` | no filter at all: only the last 10 surface readings | Does using the estimator help? | It **saves a lot of energy**, but the policy without it is **the safest**. |
+| `ppo_dr_shieldtrain` | shield active during training; each intervention costs 0.1 | Can the policy learn without overheating the cell? | **Yes**, 97 % less over-temperature during training, but it learns to rely entirely on the shield. |
+| `ppo_dr_shieldtrain_p1` | as above, with a 10× larger penalty (1.0) | With a bigger penalty, does it learn its own margin? | **A little.** It relies on the shield half as much, but is still unsafe on its own. |
 
 **Findings:**
 1. **PPO + shield is the most efficient safe controller.** It uses less energy than shield-only in every one of the 20 nominal episodes (median −23 %), and less than the PID-40 + shield in all 20 (median −15 %). Against MPC with a *perfect* 60 s load preview it is roughly a tie: cheaper in 12 of 20 nominal episodes, median −6 %. The [trajectory figure](results/trajectory_nominal.png) shows why: PPO cools early and gently, so the shield rarely steps in, whereas the shield and the plain MPC cool late and hard, which costs more under u³.
