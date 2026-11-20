@@ -166,7 +166,7 @@ We trained six versions of PPO. Each changes **one thing** compared with the mai
 |---|---|---|---|
 | `ppo_dr` (main policy) | – baseline: sees everything the filter provides (estimate, σ, θ̂) and is trained with DR | – | – |
 | `ppo` | trained on the standard cell only (no DR) | Does training on varied cells make the policy robust to model errors? | **Yes.** Without the shield, heat-mismatch episodes over 45 °C drop from 87 % to 50 %. |
-| `ppo_dr_nosigma` | cannot see the filter's uncertainty σ | Does knowing how reliable the estimate is help? | **Somewhat**, mainly under resistance mismatch. |
+| `ppo_dr_nosigma` | cannot see the filter's uncertainty σ | Does knowing how reliable the estimate is help? | **A little**, mainly under resistance mismatch. Without the shield the results are mixed and depend on the training seed; σ barely changes (see RQ3 below). |
 | `ppo_dr_raw` | no filter at all: only the last 10 surface readings | Does using the estimator help? | It **saves a lot of energy**, but the policy without it is **the safest**. |
 | `ppo_dr_shieldtrain` | shield active during training; each intervention costs 0.1 | Can the policy learn without overheating the cell? | **Yes**, 97 % less over-temperature during training, but it learns to rely entirely on the shield. |
 | `ppo_dr_shieldtrain_p1` | as above, with a 10× larger penalty (1.0) | With a bigger penalty, does it learn its own margin? | **A little.** It relies on the shield half as much, but is still unsafe on its own. |
@@ -181,7 +181,8 @@ We trained six versions of PPO. Each changes **one thing** compared with the mai
 ![RQ3](results/rq3_ablation.png)
 
 - **The estimate buys efficiency.** With the AKF estimate, PPO needs 34–38 pump-s in the nominal case. With raw surface readings only it needs 301 (range 203–351 across seeds): without a core estimate it keeps a large margin.
-- **σ helps, mostly where the model is wrong.** Under resistance mismatch, 30 % of episodes violate with σ vs 52 % without it, and 18 % vs 38 % behind the shield. The seed ranges overlap, so this is a moderate effect.
+- **σ helps a little, and the evidence is noisy.** Behind the shield, the policy that sees σ is cheaper on average (nominal 178 vs 189 pump-s) and safer under resistance mismatch (18 % vs 38 % of episodes; per training seed 0, 40, 15 % vs 25, 55, 35 %). Without the shield the picture is mixed: the version without σ even has fewer degree-seconds under heat mismatch, ageing and long bursts. That comes mostly from differences between training seeds. For example, under heat mismatch the three policies that see σ exceeded 45 °C in 5 %, 75 % and 70 % of episodes: same setup, different random seed. Three seeds are not enough to settle this.
+- **Why σ matters so little: it barely changes.** σ stays between about 0.16 and 0.22 °C most of the time and only rises to about 0.34 °C during sensor outages. It doesn't grow when the sensor noise triples, because the filter doesn't know the noise has changed. An input that is nearly constant tells the policy very little.
 - **The raw-observation policy is the safest PPO.** Behind the shield it never exceeds 45 °C apart from the physically unavoidable ageing episode, including under resistance mismatch, where the estimate misleads every estimator-based controller. Efficiency and robustness pull in opposite directions here. Deciding how much to trust the estimator is exactly the joint estimation-and-control question of RQ3.
 
 ### Safe exploration: training with the shield
