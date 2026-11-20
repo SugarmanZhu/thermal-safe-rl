@@ -98,7 +98,23 @@ There are two filters, and both use the **nominal** model:
 
 ![Calibration](results/calibration.png)
 
-Each scenario was run for 20 seeds with full cooling, so that only the estimator differs. Full numbers are in [results/estimation.md](results/estimation.md). In the table, bias = estimate − true.
+Each scenario was run for 20 seeds with full cooling, so that only the estimator differs. Full numbers are in [results/estimation.md](results/estimation.md).
+
+**How to read the estimation numbers.** Some of them need the true core temperature, so they exist only in simulation. Others use only the surface sensor, so they can also check a filter on a real battery.
+
+| Metric | What it means | Good value | Needs the true core? |
+|---|---|---|---|
+| RMSE | Typical size of the core-temperature error (root mean square, °C). | small | yes |
+| Bias | Average of (estimate − true). Negative means the filter reads too low. | ≈ 0 | yes |
+| 2σ coverage | How often the true core lies inside the filter's own ±2σ band, i.e. whether the uncertainty it reports is honest. | ≈ 95 %. Lower means overconfident; 100 % means too cautious. | yes |
+| NEES | Normalised estimation error squared: the actual error divided by the error the filter claims, squared (for the two states Tc and Ts). | ≈ 2. Above means overconfident; below means too cautious. | yes |
+| Innovation | Before each surface reading arrives, the filter predicts it. The innovation is measured − predicted. | random, around 0 | no |
+| NIS | Normalised innovation squared: the innovation divided by the size the filter expected, squared. | ≈ 1. Clearly above 1 means the model or the noise assumption is wrong. | **no** |
+| Mean normalised innovation | The average innovation, scaled the same way. It shows whether the surprises keep leaning one way. | ≈ 0. Positive means the surface keeps reading warmer than predicted. | **no** |
+
+NIS works like checking a weather forecaster who says "20 °C tomorrow, usually within ±1 °C". You don't need to know any meteorology: you just compare what was said with what happened. If the forecast is off by 3 °C every day, something is wrong. The catch is that NIS can only catch errors that show up on the surface, which is why it misses the resistance mismatch.
+
+In the table below, bias = estimate − true.
 
 | Scenario | Finding |
 |---|---|
@@ -122,6 +138,8 @@ All controllers act on the AKF estimate, except the oracle PID, which sees the t
 | MPC | Plans 60 s ahead (216 candidate plans, 3 blocks of 20 s), minimising Σu³·dt under the same safety rule as the shield. The current is assumed constant. |
 | MPC + load preview | The same MPC, but told the **true** current for the next 60 s: an upper bound on what a load forecast could buy. The worst-case burst is assumed only after that known window. |
 | PID aiming at 40 °C + shield | The PID with setpoint 40 °C, with the shield (limit 44 °C) as a backstop. |
+
+**Safety metrics.** *Episodes > 45 °C* is the share of the 20 test episodes in which the true core temperature exceeded 45 °C at any moment. *Degree-seconds above 45 °C* measures how far and for how long it exceeded the limit, ∫ max(0, Tc − 45 °C) dt: for example, 1 °C too hot for 10 s is 10 degree-seconds.
 
 **What we found** (20 evaluation drive cycles per scenario; tables in [results/controllers.md](results/controllers.md)):
 - **Under heat mismatch, PID and even the oracle PID exceed 45 °C in 85 % of episodes.** Knowing the true core temperature doesn't help a controller that only reacts. The v1 shield fails in 40 %, and the backup shield in 0 %, using 18 % less energy than always-on.
