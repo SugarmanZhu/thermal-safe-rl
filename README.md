@@ -36,6 +36,18 @@ These are means over the same 20 evaluation drive cycles for every controller. F
 
 ![All controllers at a glance](results/overview.png)
 
+The columns are the seven test scenarios (more detail in [Test scenarios](#test-scenarios)):
+
+| Column | What is different |
+|---|---|
+| nominal | nothing: the cell behaves exactly like the model |
+| heat mismatch | the cell makes 30 % more heat than the model expects |
+| resistance mismatch | heat escapes from the core 20 % more slowly than the model expects; invisible from the surface |
+| noisy | the surface sensor is 3× noisier |
+| outage | the surface sensor drops out for 30–120 s at a time, about 20 % of the time |
+| ageing | the heat the cell makes grows from ×1.0 to ×1.4 during the episode, beyond what training covered |
+| long bursts | full-load bursts last up to 360 s instead of at most 180 s |
+
 ## Model
 
 Two-state lumped thermal model of a cylindrical cell [1, 2]:
