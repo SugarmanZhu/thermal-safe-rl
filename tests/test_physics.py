@@ -314,3 +314,12 @@ def test_permanent_sensor_failure():
         sim.step(0.5)
     assert np.isnan(sim.hist["nu"][301:]).all()  # no measurement updates after the failure
     assert sim.hist["sigma"][-1] > sim.hist["sigma"][299] * 1.5
+
+
+def test_evaluate_entry_points_exist():
+    """Every evaluate.py subcommand must have its function (guards against accidental deletion)."""
+    import evaluate
+
+    for name in ("estimation_study", "tune_pid", "controller_study", "shield_sweep", "training_study",
+                 "sensor_failure_study", "plot_overview", "plot_rq3", "plot_training", "plot_trajectories"):
+        assert callable(getattr(evaluate, name, None)), name
