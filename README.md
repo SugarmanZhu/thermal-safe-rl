@@ -85,8 +85,14 @@ Every controller is tested in seven scenarios. In all of them, the estimators an
 ## RQ1: what a surface sensor can and cannot tell you
 
 There are two filters, and both use the **nominal** model:
-- **KF:** state [Tc, Ts].
-- **AKF:** state [Tc, Ts, θ], where θ scales the heat generation (Q = θ·I²·R_int) and drifts slowly.
+- **KF:** state [Tc, Ts]. It assumes the cell makes exactly the heat the model says (Q = I²·R_int).
+- **AKF** (augmented KF): state [Tc, Ts, θ], where θ scales the heat generation (Q = θ·I²·R_int). θ starts at 1 and drifts slowly, so the filter can learn how much heat the cell really makes.
+
+**In plain words.** Imagine judging the temperature of the water in a pot by touching the outside of the pot, knowing which setting the stove is on.
+- The **KF** trusts that the stove is exactly as strong as its label says. If it is actually 30 % stronger, the KF keeps underestimating the water temperature and doesn't know it is wrong.
+- The **AKF** also learns the stove's real strength. When the pot keeps feeling warmer than expected, it concludes that the stove must be stronger than labelled and corrects itself.
+- **Neither filter can learn how easily heat passes through the pot wall** (the thermal resistance Rc), because that leaves no trace on the outside of the pot. This is the resistance-mismatch case.
+- The shield uses the AKF's θ̂ too, so a cell that makes more heat automatically gets a larger cooling reserve.
 
 ![Estimation](results/estimation.png)
 
