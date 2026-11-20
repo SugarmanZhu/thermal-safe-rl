@@ -32,7 +32,7 @@ Everything runs on a laptop CPU: the full pipeline (6 PPO variants × 3 seeds ×
 | **PPO (DR) + shield** | **178 [174–186]** | **0 %** | 18 % [0–40 %] |
 | PPO, raw surface readings only + shield | 382 | 0 % | **0 %** |
 
-These are means over the same 20 evaluation drive cycles for every controller. For PPO they are also averaged over 3 training seeds, with the range across seeds in brackets. "Heat mismatch" and "resistance mismatch" are explained in [Test scenarios](#test-scenarios). Full tables: [results/controllers.md](results/controllers.md).
+These are means over the same 20 evaluation drive cycles for every controller. For PPO they are also averaged over 3 training seeds, with the range across seeds in brackets. Energy is in pump-seconds: seconds of pumping at full power (always on = 1800). The controllers are explained in [The controllers in plain words](#the-controllers-in-plain-words), and "heat mismatch" and "resistance mismatch" in [Test scenarios](#test-scenarios). Full tables: [results/controllers.md](results/controllers.md).
 
 ![Energy vs safety](results/pareto.png)
 
@@ -49,6 +49,20 @@ Cs · dTs/dt = (Tc − Ts)/Rc − (Ts − Tf)·(h0 + h1·u)
 - Cc = 62.7 J/K, Cs = 4.5 J/K and Rc = 1.94 K/W are the values identified for a 2.3 Ah A123 26650 LiFePO4 cell in Table 1 of Lin et al. [2]. The cooling map h(u) = 0.15 + 0.85·u W/K is this demo's assumption; the convection resistance identified in [2] (Ru = 3.19 K/W, i.e. h ≈ 0.31 W/K) lies inside its range.
 - Steady state at 25 A is 43.4 °C with full cooling and 78.8 °C with none, so cooling is necessary. A cell that makes 30 % more heat would reach 48.9 °C even with full cooling, so under sustained full load some violations are physically unavoidable.
 - Each 2 s step is discretised exactly. The drive cycle is a random piecewise-constant current (0–25 A) with occasional bursts of 20–25 A lasting up to 180 s. Every controller is evaluated on the same 20 random drive cycles (seeds 0–19). Training uses fresh random cycles, and design choices were tuned on separate seeds (1000–1019).
+
+## The controllers in plain words
+
+| Method | What it does | Everyday analogy |
+|---|---|---|
+| Kalman filter (KF / AKF) | Estimates the core temperature, which cannot be measured, from the surface reading and the model, and says how sure it is (σ). The AKF also estimates how much heat the cell really makes. Every controller below except the oracle PID acts on this estimate. | A navigator estimating a ship's position from its speed, heading and the occasional landmark. |
+| Always on | Full cooling all the time. Safe, but wasteful. | Running the air conditioner at maximum all day. |
+| PID | A classic feedback controller: the further the estimated core is above its target, the harder it cools. Simple and cheap, but it only reacts after the temperature has already risen. | A thermostat. |
+| Oracle PID | The same PID, but allowed to see the true core temperature. Impossible in practice; used only as a reference. | – |
+| Safety shield | A safety check between a controller and the pump. Before each action it predicts the core temperature, with its uncertainty, and asks: "if I do this and then a worst-case current burst arrives, can full cooling still keep the core below 44 °C?" If not, it raises the cooling to the smallest safe amount. It never lowers the cooling. "Shield only" means the shield on its own, always choosing the least cooling it considers safe. | A car's automatic emergency braking: the driver drives, and the system only steps in to prevent a crash. |
+| MPC (model predictive control) | Uses the model to try many cooling plans for the next 60 s, keeps the safe ones, picks the cheapest, applies only its first step, then plans again. Widely used in industry. "With load preview" means it is also told the future current. | Thinking a few moves ahead in chess, then thinking again after every move. |
+| PPO (reinforcement learning) | A neural-network policy that learned by trial and error in simulation over a million steps, rewarded for using little energy and penalised for exceeding 45 °C. Once trained it decides instantly, but it has no built-in safety guarantee. "DR" (domain randomisation) means it was trained on many slightly different cells, so it copes better with model errors. | Learning to drive by practising in a simulator. |
+| PPO + shield | The learned policy proposes the cooling, and the shield overrides it only when needed. The policy saves energy; the shield provides the safety. | A learner driver with an instructor who has a second brake pedal. |
+| PID aiming at 40 °C + shield | A PID that aims well below the shield's 44 °C limit, so the shield rarely has to step in. The extra margin also covers errors the filter cannot see. | Keeping more than the minimum distance to the car in front. |
 
 ## Test scenarios
 
