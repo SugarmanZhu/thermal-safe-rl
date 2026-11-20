@@ -34,7 +34,7 @@ Everything runs on a laptop CPU: the full pipeline (6 PPO variants × 3 seeds ×
 
 These are means over the same 20 evaluation drive cycles for every controller. For PPO they are also averaged over 3 training seeds, with the range across seeds in brackets. Energy is in pump-seconds: seconds of pumping at full power (always on = 1800). The controllers are explained in [The controllers in plain words](#the-controllers-in-plain-words), and "heat mismatch" and "resistance mismatch" in [Test scenarios](#test-scenarios). Full tables: [results/controllers.md](results/controllers.md).
 
-![Energy vs safety](results/pareto.png)
+![All controllers at a glance](results/overview.png)
 
 ## Model
 

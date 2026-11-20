@@ -219,11 +219,14 @@ CTRL_STYLE = {
     "ppo_dr_shieldtrain+shield": dict(color=BLUE, marker="P", label="PPO trained with shield (penalty 0.1) + shield"),
     "ppo_dr_shieldtrain_p1": dict(color=BLUE, marker="d", mfc="none", label="PPO trained with shield (penalty 1.0), no shield"),
     "ppo_dr_shieldtrain_p1+shield": dict(color=BLUE, marker="d", label="PPO trained with shield (penalty 1.0) + shield"),
+    "ppo_dr_raw": dict(color=BLUE, marker="s", mfc="none", label="PPO, raw surface readings only, no shield"),
+    "ppo_dr_raw+shield": dict(color=BLUE, marker="s", label="PPO, raw surface readings only + shield"),
     "ppo": dict(color=BLUE, marker="X", mfc="none", label="PPO (no DR), no shield"),
     "ppo+shield": dict(color=BLUE, marker="X", label="PPO (no DR) + shield"),
 }
-PARETO_SET = ["always_on", "oracle_pid", "pid", "pid40_shield", "shield_only", "mpc", "mpc_preview",
-              "ppo_dr", "ppo_dr+shield", "ppo_dr_shieldtrain_p1", "ppo_dr_shieldtrain_p1+shield"]
+OVERVIEW_SET = ["always_on", "pid", "oracle_pid", "pid40_shield", "shield_only", "mpc", "mpc_preview",
+                "ppo_dr", "ppo_dr+shield", "ppo_dr_raw+shield", "ppo_dr_shieldtrain_p1",
+                "ppo_dr_shieldtrain_p1+shield"]
 TRACE_SET = ["always_on", "pid", "pid40_shield", "shield_only", "mpc_preview", "ppo_dr", "ppo_dr+shield"]
 TRACE_SCENARIOS = ("nominal", "resistance_mismatch")
 TRACE_SEED = 0
@@ -358,7 +361,7 @@ def controller_study(names: list[str], n_seeds: int, estimator: str, n_jobs: int
     if estimator == "akf":
         for scen in TRACE_SCENARIOS:
             plot_trajectories(traces, [n for n in TRACE_SET if n in names], scen)
-        plot_pareto(df, [n for n in PARETO_SET if n in names])
+        plot_overview(df, [n for n in OVERVIEW_SET if n in names])
         if {"ppo_dr", "ppo_dr_nosigma", "ppo_dr_raw"} <= set(names):
             plot_rq3(df)
     return df
@@ -462,142 +465,67 @@ def plot_trajectories(traces: dict, names, scen: str) -> None:
     plt.close(fig)
 
 
-def plot_pareto(df: pd.DataFrame, names) -> None:
+# Sequential ramps (one hue, light to dark). Blue is the reference palette's sequential ramp;
+# the second sequential context takes the next categorical hue (orange).
+BLUE_RAMP = ["#e6f0fc", "#b7d3f6", "#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281", "#0d366b"]
+ORANGE_RAMP = ["#fbf1ec", "#f9d2c0", "#f4a888", "#eb6834", "#c9501f", "#9a3b16", "#6b280d"]
+
+
+def _ink_on(rgb) -> str:
+    """Dark or light text, whichever reads better on a cell of this colour."""
+    r, g, b = rgb[:3]
+    lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return INK if lum > 0.5 else "#ffffff"
+
+
+def plot_overview(df: pd.DataFrame, names) -> None:
+    """Two heatmaps with one row per controller and one column per scenario: cooling energy
+    and how often the core exceeded 45 degC. Every value is printed in its own cell, so
+    nothing overlaps."""
+    from matplotlib.colors import LinearSegmentedColormap, LogNorm, Normalize
+
     mean = aggregate(df)[0]
     scens = list(SCENARIOS)
-    fig, axes = plt.subplots(2, 4, figsize=(12, 6.2), sharex=True, sharey=True)
-    for ax, scen in zip(axes.flat, scens):
-        for n in names:
-            st = style(n)
-            m = mean.loc[(scen, n)]
-            ax.plot(m.energy, m.deg_s, ls="none", marker=st["marker"], ms=13 if st["marker"] == "*" else 8,
-                    color=st["color"],
-                    mfc=st.get("mfc", st["color"]), mec=st["color"] if st.get("mfc") else SURFACE,
-                    mew=1.5 if st.get("mfc") else 1.0, zorder=3)
-        ax.set_title(scen.replace("_", " "), loc="left")
-        _log_energy_axis(ax)
-        ax.set_yscale("symlog", linthresh=1.0)
-        ax.set_ylim(-0.3, 3000)
-    axes.flat[-1].axis("off")
-    handles = [plt.Line2D([], [], ls="none", marker=style(n)["marker"], ms=13 if style(n)["marker"] == "*" else 8,
-                          color=style(n)["color"],
-                          mfc=style(n).get("mfc", style(n)["color"]), label=style(n)["label"]) for n in names]
-    axes.flat[-1].legend(handles=handles, loc="center left", fontsize=9)
-    for ax in axes[:, 0]:
-        ax.set_ylabel("degree-s above 45 °C\n(symlog; lower is safer)")
-    for ax in axes[-1, :3]:
-        ax.set_xlabel("cooling energy, pump-s (log)")
-    axes[0, 3].set_xlabel("cooling energy, pump-s (log)")
-    axes[0, 3].xaxis.set_tick_params(labelbottom=True)
-    fig.suptitle(f"Energy vs safety, mean of {df.seed.nunique()} evaluation seeds per point "
-                 "(bottom-left is best; table: results/controllers.md)",
+    E = np.array([[mean.loc[(s, n), "energy"] for s in scens] for n in names])
+    V = np.array([[100 * mean.loc[(s, n), "any_violation"] for s in scens] for n in names])
+    panels = [
+        (E, LinearSegmentedColormap.from_list("energy", BLUE_RAMP), LogNorm(10, 1800), "{:.0f}",
+         "Cooling energy, pump-s (lighter = cheaper)"),
+        (V, LinearSegmentedColormap.from_list("viol", ORANGE_RAMP), Normalize(0, 100), "{:.0f}%",
+         "Episodes where the core exceeded 45 °C (lighter = safer)"),
+    ]
+    fig, axes = plt.subplots(1, 2, figsize=(14, 0.43 * len(names) + 2.2), sharey=True)
+    col_labels = [s.replace("_", "\n") for s in scens]
+    for ax, (M, cmap, norm, fmt, title) in zip(axes, panels):
+        ax.imshow(M, cmap=cmap, norm=norm, aspect="auto")
+        for i in range(M.shape[0]):
+            for j in range(M.shape[1]):
+                ax.text(j, i, fmt.format(M[i, j]), ha="center", va="center", fontsize=8.5,
+                        color=_ink_on(cmap(norm(M[i, j]))))
+        ax.set_xticks(range(len(scens)))
+        ax.set_xticklabels(col_labels, fontsize=8.5, color=INK2)
+        ax.tick_params(top=True, labeltop=True, bottom=False, labelbottom=False, length=0)
+        ax.set_xticks(np.arange(-0.5, len(scens), 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, len(names), 1), minor=True)
+        ax.grid(which="minor", color=SURFACE, linewidth=2)  # 2 px gap between cells
+        ax.grid(which="major", visible=False)
+        ax.tick_params(which="minor", length=0)
+        for side in ax.spines.values():
+            side.set_visible(False)
+        ax.set_title(title, loc="left", pad=34)
+    axes[0].set_yticks(range(len(names)))
+    axes[0].set_yticklabels([style(n)["label"] for n in names], fontsize=9, color=INK)
+    axes[0].tick_params(axis="y", length=0)
+    for lab, n in zip(axes[0].get_yticklabels(), names):
+        if n == "ppo_dr+shield":
+            lab.set_fontweight("bold")
+    n_train = df.loc[df.get("train_seed", pd.Series(-1, index=df.index)) >= 0, "train_seed"].nunique()
+    fig.suptitle(f"All controllers at a glance: mean of {df.seed.nunique()} evaluation episodes per cell"
+                 + (f" (PPO: also over {n_train} training seeds)" if n_train else ""),
                  x=0.01, ha="left", fontsize=11, fontweight="bold")
-    fig.tight_layout()
-    fig.savefig(RESULTS / "pareto.png", dpi=150)
-    plt.close(fig)
-
-
-def plot_rq3(df: pd.DataFrame) -> None:
-    """RQ3: does giving the policy the estimator's output (and its uncertainty) help?
-    Policies without the shield, so the comparison is about the policy alone. Bars are means
-    over training seeds; whiskers span the lowest to highest training seed (3 seeds is too
-    few for a meaningful standard deviation)."""
-    modes = [("ppo_dr_raw", "raw surface readings only"), ("ppo_dr_nosigma", "estimate, no σ"),
-             ("ppo_dr", "estimate + σ (full)")]
-    ramp = ["#86b6ef", "#2a78d6", "#104281"]  # ordinal blue ramp: more estimator information
-    per_seed = (df[df.controller.isin([m for m, _ in modes])]
-                .groupby(["scenario", "controller", "train_seed"]).mean(numeric_only=True))
-    g = per_seed.groupby(["scenario", "controller"])
-    mean, lo, hi = g.mean(), g.min(), g.max()
-    scens = list(SCENARIOS)
-    y = np.arange(len(scens))
-    h = 0.26
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4.9), sharey=True)
-    for ax, (metric, title) in zip(axes, [("energy", "Cooling energy (pump-s)"),
-                                          ("deg_s", "Degree-s above 45 °C (lower is safer)")]):
-        for i, ((name, label), col) in enumerate(zip(modes, ramp)):
-            vals = np.array([mean.loc[(s, name), metric] for s in scens])
-            lows = np.array([lo.loc[(s, name), metric] for s in scens])
-            highs = np.array([hi.loc[(s, name), metric] for s in scens])
-            yy = y + (i - 1) * (h + 0.03)
-            ax.barh(yy, vals, height=h, color=col, edgecolor=SURFACE, lw=1, label=label, zorder=2)
-            ax.hlines(yy, lows, highs, color=INK2, lw=0.9, zorder=3)
-        ax.set_title(title, loc="left")
-        ax.grid(axis="y", visible=False)
-        ax.set_xlim(left=0)
-    axes[0].set_yticks(y)
-    axes[0].set_yticklabels([s.replace("_", " ") for s in scens])
-    axes[0].invert_yaxis()
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center", ncol=3, fontsize=8.5, title="policy observes",
-               title_fontsize=8.5, bbox_to_anchor=(0.5, 0.0))
-    n_train = df.loc[df.controller == "ppo_dr", "train_seed"].nunique()
-    fig.suptitle(f"RQ3: what the policy observes (PPO with DR, no shield). Bars: mean of {n_train} "
-                 "training seeds; whiskers: lowest to highest seed", x=0.01, ha="left", fontsize=11,
-                 fontweight="bold")
-    fig.tight_layout(rect=(0, 0.1, 1, 1))
-    fig.savefig(RESULTS / "rq3_ablation.png", dpi=150)
-    plt.close(fig)
-
-
-def training_study(runs_dir: Path) -> pd.DataFrame | None:
-    """Training-time safety: how much do policies violate the limit while they learn?"""
-    rows = []
-    for log in sorted(Path(runs_dir).glob("*/seed*/train_log.csv")):
-        d = pd.read_csv(log)
-        d["variant"], d["train_seed"] = log.parent.parent.name, int(log.parent.name.removeprefix("seed"))
-        rows.append(d)
-    if not rows:
-        print(f"no training logs under {runs_dir}")
-        return None
-    df = pd.concat(rows, ignore_index=True)
-    per_run = df.groupby(["variant", "train_seed"]).agg(
-        episodes=("deg_s", "size"), total_deg_s=("deg_s", "sum"),
-        viol_episodes_pct=("deg_s", lambda x: 100 * (x > 0).mean()),
-        last_energy=("energy", lambda x: x.tail(max(1, len(x) // 10)).mean()))
-    g = per_run.groupby("variant")
-    tab = pd.DataFrame({
-        "training seeds": g.size(),
-        "episodes per run": g.episodes.mean().round(0),
-        "degree-s above 45 °C, whole training": [_fmt(m, s, 0) for m, s in zip(g.total_deg_s.mean(), g.total_deg_s.std().fillna(0))],
-        "episodes with a violation (%)": [_fmt(m, s, 1) for m, s in zip(g.viol_episodes_pct.mean(), g.viol_episodes_pct.std().fillna(0))],
-        "energy per episode, last 10 % of training": g.last_energy.mean().round(0),
-    })
-    RESULTS.mkdir(exist_ok=True)
-    (RESULTS / "training_safety.md").write_text(
-        "Training-time safety (unsafe exploration). Mean ± std over training seeds. Training episodes use "
-        "randomised conditions (extra sensor noise, sensor outages and, with DR, randomised cell parameters). Generated by `python evaluate.py training`.\n\n"
-        + tab.to_markdown() + "\n")
-    plot_training(df)
-    return tab
-
-
-def plot_training(df: pd.DataFrame) -> None:
-    known = ("ppo_dr", "ppo", "ppo_dr_shieldtrain", "ppo_dr_shieldtrain_p1", "ppo_dr_nosigma", "ppo_dr_raw")
-    order = [v for v in known if v in set(df.variant)] + sorted(set(df.variant) - set(known))
-    colors = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
-    for v, col in zip(order, colors):
-        d = df[df.variant == v]
-        grid = np.linspace(0, d.timesteps.max(), 60)
-        cum = [np.interp(grid, r.timesteps, r.deg_s.cumsum()) for _, r in d.groupby("train_seed")]
-        en = [np.interp(grid, r.timesteps, r.energy.rolling(20, min_periods=1).mean()) for _, r in d.groupby("train_seed")]
-        for ax, curves in zip(axes, (cum, en)):
-            c = np.array(curves)
-            ax.plot(grid / 1e3, c.mean(0), color=col, lw=1.8, label=v)
-            if len(c) > 1:
-                ax.fill_between(grid / 1e3, c.min(0), c.max(0), color=col, alpha=0.15, lw=0)
-    axes[0].set_title("Cumulative degree-s above 45 °C during training", loc="left")
-    axes[0].set_ylabel("degree-s (lower is safer)")
-    axes[1].set_title("Energy per training episode (rolling mean of 20)", loc="left")
-    axes[1].set_ylabel("pump-s")
-    for ax in axes:
-        ax.set_xlabel("training steps (thousands)")
-    axes[0].legend(fontsize=8, loc="upper left")
-    fig.suptitle("Learning safely? Mean over training seeds, band = min to max",
-                 x=0.01, ha="left", fontsize=11, fontweight="bold")
-    fig.tight_layout()
-    fig.savefig(RESULTS / "training_safety.png", dpi=150)
+    fig.text(0.01, 0.01, "Full tables with spread: results/controllers.md", fontsize=8, color=INK2)
+    fig.tight_layout(rect=(0, 0.03, 1, 0.97))
+    fig.savefig(RESULTS / "overview.png", dpi=150)
     plt.close(fig)
 
 
