@@ -102,6 +102,7 @@ class Scenario:
     outage_len_s: tuple[float, float] = (30.0, 120.0)
     ageing_end: float = 1.0  # R_int scale at the end of the episode (ramps from 1.0)
     burst_len_s: tuple[float, float] = (60.0, 180.0)
+    sensor_fail_s: float | None = None  # surface sensor dead from this time on (permanent failure)
 
 
 SCENARIOS: dict[str, Scenario] = {
@@ -180,6 +181,8 @@ def make_episode(scenario: Scenario, seed: int, n_steps: int = EPISODE_STEPS) ->
     ramp = 1.0 + (scenario.ageing_end - 1.0) * np.linspace(0.0, 1.0, n_steps)
     noise = r_noise.standard_normal(n_steps + 1) * SENSOR_SIGMA * scenario.noise_scale
     online = outage_mask(r_out, n_steps + 1, scenario.outage_frac, scenario.outage_len_s)
+    if scenario.sensor_fail_s is not None:
+        online[int(round(scenario.sensor_fail_s / DT)):] = False
     T0 = NOMINAL.Tf + r_init.uniform(0.0, 3.0)
     return Episode(I, scenario.R_int_scale * ramp, noise, online, T0)
 

@@ -302,3 +302,15 @@ def test_mpc_preview_runs_and_is_safe_on_nominal():
     for _ in range(200):
         sim.step(c.act(sim))
     assert np.nanmax(sim.hist["Tc"]) < 45.0
+
+
+def test_permanent_sensor_failure():
+    sc = replace(SCENARIOS["nominal"], sensor_fail_s=600.0)
+    ep = make_episode(sc, 0)
+    assert ep.online[:300].all() and not ep.online[300:].any()
+    sim = ThermalSim(sc, KalmanFilter(augment=True))
+    sim.reset(0)
+    while not sim.done:
+        sim.step(0.5)
+    assert np.isnan(sim.hist["nu"][301:]).all()  # no measurement updates after the failure
+    assert sim.hist["sigma"][-1] > sim.hist["sigma"][299] * 1.5

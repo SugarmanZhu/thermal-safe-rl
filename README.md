@@ -94,6 +94,32 @@ Every controller is tested in seven scenarios. In all of them, the estimators an
 - **Heat mismatch** is like the person exercising. More heat comes out, so the jacket surface gets warmer than predicted. The filter sees this surplus in its prediction errors (NIS), and the AKF corrects for it.
 - **Resistance mismatch** is like a thicker jacket than assumed. The same heat still leaves through the surface, so the jacket surface looks exactly as predicted, but the body inside is hotter. At steady state Ts − Tf = Q/h whatever Rc is, so the surface sensor carries no information about Rc. The core estimate ends up about 1 °C too low and nothing flags it, which is why this scenario defeats every controller that trusts the estimate.
 
+### What happens when the sensor drops out?
+
+The controllers do **not** switch to full cooling. Only the surface sensor goes dark: the current is still measured, so the filter keeps predicting the core and surface temperatures from the model. It works like a car's navigation in a tunnel, which keeps estimating your position from speed and heading after the GPS signal is lost.
+- The filter skips its correction step, so its uncertainty σ grows.
+- The shield keeps "core estimate + 2σ ≤ 44 °C", so it automatically leaves a larger margin.
+- PPO also sees a sensor-online flag.
+- When the sensor comes back, the first reading corrects the estimate.
+
+**Short outages** (30–120 s, the *outage* scenario) cost little. σ rises from about 0.2 to about 0.34 °C, the shielded controllers use 8–15 % more energy than with a working sensor, and none of them exceeds 45 °C.
+
+**Permanent failure.** In a separate test, the sensor dies 10 minutes into the episode and never comes back (`python evaluate.py sensor-failure`, 20 episodes per cell, full table in [results/sensor_failure.md](results/sensor_failure.md)):
+
+| Controller (nominal cell) | Energy over the last 20 min: sensor working → dead | Episodes > 45 °C after the failure |
+|---|---|---|
+| Shield only | 138 → 308 | 0 % |
+| PID aiming at 40 °C + shield | 114 → 301 | 0 % |
+| PPO (DR) + shield | 85 → 282 | 0 % |
+| PPO (DR), no shield | 33 → 126 | 2 % → **28 %** |
+| Always on | 1200 | 0 % |
+
+![Sensor failure](results/sensor_failure.png)
+
+- **The shielded controllers become steadily more cautious as σ grows** (from about 0.2 to about 1.0 °C after 20 minutes). Their cooling roughly doubles but stays far below full cooling, and they never exceed 45 °C. On the hot cell (heat mismatch) they were already cooling hard, and use 11 % more.
+- **PPO without the shield misbehaves.** In training it only saw outages of up to 2 minutes; with a dead sensor it exceeds 45 °C in 28 % of episodes. A learned policy can act unpredictably in situations it was never trained on, and the shield covers that.
+- **Caveat.** In the simulation the model is otherwise exact, so the estimate stays within about 0.1 °C of the truth even without the sensor (dashed line). On a real cell, unmodelled effects would make it drift. The growing σ is what makes the shield cautious regardless; whether it grows fast enough for a real cell would need testing. A PID without the shield keeps trusting the estimate completely, which happened to be harmless here only because the estimate stayed accurate.
+
 ## RQ1: what a surface sensor can and cannot tell you
 
 There are two filters, and both use the **nominal** model:
@@ -242,6 +268,7 @@ python evaluate.py shield-sweep     # price of robustness (~1 min on 4 cores)
 python run_all.py                   # 6 PPO variants x 3 seeds x 1M steps (~45 min on 4 CPU cores)
 python evaluate.py training         # training-time safety
 python evaluate.py controllers      # all controllers incl. PPO (~18 min on 4 cores)
+python evaluate.py sensor-failure   # permanent sensor failure 10 min into the episode (~2 min on 4 cores)
 ```
 
 No GPU is needed. On free cloud machines, use `notebooks/colab_debug.ipynb` for a quick test and `notebooks/kaggle_train.ipynb` for the full run (Accelerator *None*, then *Save & Run All*, which keeps running after you close the browser).
@@ -252,7 +279,7 @@ No GPU is needed. On free cloud machines, use `notebooks/colab_debug.ipynb` for 
 | `estimators.py` | `KalmanFilter(augment=False/True)`: KF and AKF, with batch open-loop forecasts (constant or previewed current) |
 | `controllers.py` | Always-on, PID, `PIDShield`, `Shield` with `BackupCheck`, shield-only, MPC (with optional preview), `PPOController` |
 | `train.py`, `run_all.py` | PPO training with checkpoints and resume; all variants × seeds in parallel |
-| `evaluate.py` | Estimation study, PID tuning, controller comparison, shield sweep, training safety |
+| `evaluate.py` | Estimation study, PID tuning, controller comparison, shield sweep, training safety, sensor failure |
 | `runs/` | Final trained policies (model, normalisation statistics, config, training log) for all 18 runs |
 | `tests/test_physics.py` | Unit tests, including that training and evaluation build exactly the same observation |
 
