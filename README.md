@@ -32,7 +32,7 @@ Everything runs on a laptop CPU: the full pipeline (6 PPO variants × 3 seeds ×
 | **PPO (DR) + shield** | **178 [174–186]** | **0 %** | 18 % [0–40 %] |
 | PPO, raw surface readings only + shield | 382 | 0 % | **0 %** |
 
-These are means over the same 20 evaluation drive cycles for every controller. For PPO they are also averaged over 3 training seeds, with the range across seeds in brackets. Full tables: [results/controllers.md](results/controllers.md).
+These are means over the same 20 evaluation drive cycles for every controller. For PPO they are also averaged over 3 training seeds, with the range across seeds in brackets. "Heat mismatch" and "resistance mismatch" are explained in [Test scenarios](#test-scenarios). Full tables: [results/controllers.md](results/controllers.md).
 
 ![Energy vs safety](results/pareto.png)
 
@@ -49,6 +49,24 @@ Cs · dTs/dt = (Tc − Ts)/Rc − (Ts − Tf)·(h0 + h1·u)
 - Cc = 62.7 J/K, Cs = 4.5 J/K and Rc = 1.94 K/W are the values identified for a 2.3 Ah A123 26650 LiFePO4 cell in Table 1 of Lin et al. [2]. The cooling map h(u) = 0.15 + 0.85·u W/K is this demo's assumption; the convection resistance identified in [2] (Ru = 3.19 K/W, i.e. h ≈ 0.31 W/K) lies inside its range.
 - Steady state at 25 A is 43.4 °C with full cooling and 78.8 °C with none, so cooling is necessary. A cell that makes 30 % more heat would reach 48.9 °C even with full cooling, so under sustained full load some violations are physically unavoidable.
 - Each 2 s step is discretised exactly. The drive cycle is a random piecewise-constant current (0–25 A) with occasional bursts of 20–25 A lasting up to 180 s. Every controller is evaluated on the same 20 random drive cycles (seeds 0–19). Training uses fresh random cycles, and design choices were tuned on separate seeds (1000–1019).
+
+## Test scenarios
+
+Every controller is tested in seven scenarios. In all of them, the estimators and controllers use the **nominal** model; only the simulated "real" cell or sensor changes.
+
+| Scenario | What is different from the model | Possible real-world cause |
+|---|---|---|
+| Nominal | nothing | – |
+| Heat mismatch | internal resistance R_int ×1.3, so the cell makes 30 % more heat than the model expects | ageing, low temperature, cell-to-cell variation |
+| Resistance mismatch | core-to-surface thermal resistance Rc ×1.2, so heat escapes from the core more slowly than the model expects | manufacturing variation, changes in the cell's internal structure |
+| Noisy | surface sensor noise ×3 | a poorer sensor or electrical interference |
+| Outage | surface sensor offline for 30–120 s at a time, about 20 % of the time | loose connection, sensor fault |
+| Ageing | R_int grows from ×1.0 to ×1.4 during the episode, beyond the range seen in training | battery degradation |
+| Long bursts | full-load bursts last 180–360 s instead of at most 180 s | a load pattern never seen in training |
+
+**Why the two mismatches behave so differently.** Think of the cell as a person in a jacket. The body is the core, which produces heat; the jacket is the thermal resistance Rc; and we can only measure the outside of the jacket.
+- **Heat mismatch** is like the person exercising. More heat comes out, so the jacket surface gets warmer than predicted. The filter sees this surplus in its prediction errors (NIS), and the AKF corrects for it.
+- **Resistance mismatch** is like a thicker jacket than assumed. The same heat still leaves through the surface, so the jacket surface looks exactly as predicted, but the body inside is hotter. At steady state Ts − Tf = Q/h whatever Rc is, so the surface sensor carries no information about Rc. The core estimate ends up about 1 °C too low and nothing flags it, which is why this scenario defeats every controller that trusts the estimate.
 
 ## RQ1: what a surface sensor can and cannot tell you
 
